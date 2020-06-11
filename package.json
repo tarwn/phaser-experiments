@@ -4,7 +4,6 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "cd ./terrain && npm run start",
     "test": "npx test",
     "lint": "eslint src/**/*.ts"
   },
