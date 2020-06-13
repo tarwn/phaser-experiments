@@ -16,7 +16,8 @@ export enum Status {
   MeshNoised = 4,
   HeightMapComplete = 5,
   SimulatingErosion = 6,
-  ErosionDone = 7
+  ErosionDone = 7,
+  CoastlineDone = 8
 }
 
 enum Direction {
@@ -50,6 +51,7 @@ export interface IMeshNeighbor {
   site: Voronoi.Site;
   dir: Direction;
   meshItem: IMeshItem | null;
+  halfEdge: Voronoi.Halfedge;
 }
 
 
@@ -72,6 +74,7 @@ export class MainScene extends Phaser.Scene {
   heightMap!: Phaser.GameObjects.Group;
   rng!: seedrandom.prng;
   simulationState: any;
+  coastline: any;
 
   constructor() {
     super("MainScene");
@@ -131,12 +134,18 @@ export class MainScene extends Phaser.Scene {
         if (this.simulationState.counter > 100 || (this.simulationState.remaining == remaining && this.simulationState.counter >= 10)) {
           this.heightMap.clear(true, true);
           this.heightMap = this.add.group(this.drawHeightMap(3));
+          this.assignMeshType();
           this.status = Status.ErosionDone;
         }
         this.simulationState.remaining = remaining;
         break;
+      case Status.ErosionDone:
+        this.coastline = this.drawCoastline(4);
+        this.status = Status.CoastlineDone;
+        break;
     }
   }
+
 
   createVoronoi(): Voronoi.VoronoiDiagram {
     const rng = seedrandom(this.seed);
@@ -154,8 +163,8 @@ export class MainScene extends Phaser.Scene {
     const tempHash = {} as { [key: string]: IMeshItem };
     const mesh = this.voronoi.cells.map(c => {
       const neighbors = c.halfedges.map(h => h.edge.lSite == c.site
-        ? { site: h.edge.rSite, dir: Direction.Right, meshItem: null } as IMeshNeighbor
-        : { site: h.edge.lSite, dir: Direction.Left, meshItem: null } as IMeshNeighbor
+        ? { site: h.edge.rSite, dir: Direction.Right, meshItem: null, halfEdge: h } as IMeshNeighbor
+        : { site: h.edge.lSite, dir: Direction.Left, meshItem: null, halfEdge: h } as IMeshNeighbor
       ).filter(n => n !== null && n.site !== null);
       const newItem = {
         ...c,
@@ -211,6 +220,61 @@ export class MainScene extends Phaser.Scene {
     return lines;
   }
 
+  drawHeightMap(depth: number) {
+    // return this.mesh.map(m => {
+    //   if (m.height > 0) {
+    //     const color = 0xddffdd;
+    //     const alpha = m.height / MAX_HEIGHT_SCALE_M;
+    //     return this.add.polygon(0, 0, m.points, color, alpha)
+    //       .setDepth(depth)
+    //       .setOrigin(0, 0);
+    //   }
+    //   else {
+    //     const color = 0x222299;
+    //     const alpha = 1 - Math.abs(m.height) / INITIAL_HEIGHT_SCALE_M;
+    //     return this.add.polygon(0, 0, m.points, color, alpha)
+    //       .setDepth(depth)
+    //       .setOrigin(0, 0);
+    //   }
+    // });
+    return this.mesh.map(m => {
+      if (m.height > 0) {
+        const colorAdjust = .3 + .7 * (m.height / MAX_HEIGHT_SCALE_M);
+        const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
+        return this.add.polygon(0, 0, m.points, color.color, .5)
+          .setDepth(depth)
+          .setOrigin(0, 0);
+      }
+      else {
+        const color = 0x222299;
+        const alpha = 1 - (Math.abs(m.height) / INITIAL_HEIGHT_SCALE_M) * .9;
+        return this.add.polygon(0, 0, m.points, color, alpha)
+          .setDepth(depth)
+          .setOrigin(0, 0);
+      }
+    });
+  }
+
+  drawCoastline(depth: number): any {
+    const edges = [] as Voronoi.Halfedge[];
+    this.mesh.forEach(m => {
+      if (m.type === MeshType.Ocean) {
+        m.neighbors.forEach(n => {
+          if (n.meshItem?.type === MeshType.Land) {
+            edges.push(n.halfEdge);
+          }
+        });
+      }
+    });
+    return edges.map(e => {
+      const start = e.getStartpoint();
+      const end = e.getEndpoint();
+      return this.add.line(0, 0, start.x, start.y, end.x, end.y, 0x000000, .3)
+        .setOrigin(0, 0)
+        .setDepth(depth);
+    });
+  }
+
   applyInitialNoise(mesh: IMeshItem[]) {
     const noise2D = makeNoise2D(this.rng());
     mesh.forEach(m => {
@@ -219,25 +283,6 @@ export class MainScene extends Phaser.Scene {
       }
       else {
         m.height = INITIAL_HEIGHT_SCALE_M - (noise2D(m.site.x, m.site.y) * INITIAL_HEIGHT_SCALE_M * 2);
-      }
-    });
-  }
-
-  drawHeightMap(depth: number) {
-    return this.mesh.map(m => {
-      if (m.height > 0) {
-        const color = 0xddffdd;
-        const alpha = m.height / MAX_HEIGHT_SCALE_M;
-        return this.add.polygon(0, 0, m.points, color, alpha)
-          .setDepth(depth)
-          .setOrigin(0, 0);
-      }
-      else {
-        const color = 0x222299;
-        const alpha = 1 - Math.abs(m.height) / INITIAL_HEIGHT_SCALE_M;
-        return this.add.polygon(0, 0, m.points, color, alpha)
-          .setDepth(depth)
-          .setOrigin(0, 0);
       }
     });
   }
@@ -300,9 +345,6 @@ export class MainScene extends Phaser.Scene {
     const newRange = MAX_HEIGHT_SCALE_M + oceanDepth;
     this.mesh.forEach(m => {
       m.height = (m.height - lowestPoint) / totalRange * newRange - oceanDepth;
-      if (m.height < oceanDepth) {
-        m.type = MeshType.Ocean;
-      }
     });
   }
 
@@ -369,4 +411,11 @@ export class MainScene extends Phaser.Scene {
     }, 0);
   }
 
+  assignMeshType() {
+    this.mesh.forEach(m => {
+      if (m.height < 0) {
+        m.type = MeshType.Ocean;
+      }
+    });
+  }
 }
