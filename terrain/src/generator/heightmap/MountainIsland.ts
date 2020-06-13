@@ -1,8 +1,9 @@
 import { IMeshItem } from "../../mesh/types";
+import { Mesh } from "../../mesh/Mesh";
 
 
 export const MountainIslandGenerator = {
-  adjustHeightMap: (mesh: IMeshItem[], peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, rng: seedrandom.prng) => {
+  adjustHeightMap: (mesh: Mesh, peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, rng: seedrandom.prng) => {
     const peaks = peakHeights.map(p => {
       const margin = 200 * p / 1;
       return {
@@ -16,7 +17,7 @@ export const MountainIslandGenerator = {
     let lowestPoint = peaks[0].height;
     // seed heights from closest mesh nodes to peaks + add their neighbors to queue
     peaks.forEach(p => {
-      const closest = mesh.reduce((prev, cur) => {
+      const closest = mesh.meshItems.reduce((prev, cur) => {
         if (prev == null) {
           return cur;
         }
@@ -58,7 +59,7 @@ export const MountainIslandGenerator = {
     const totalRange = maxHeight - lowestPoint;
     const oceanDepth = maxDepth;
     const newRange = maxHeight + oceanDepth;
-    mesh.forEach(m => {
+    mesh.meshItems.forEach(m => {
       m.height = (m.height - lowestPoint) / totalRange * newRange - oceanDepth;
     });
   }

@@ -1,9 +1,8 @@
 import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { IMeshItem, Direction, MeshType } from "../mesh/types";
-import { Status } from "../generator/status";
-import { createVoronoi, createMesh } from "../mesh/Mesh";
+import { Direction, MeshType } from "../mesh/types";
+import { createVoronoi, getEmptyIO, Mesh } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
@@ -14,11 +13,11 @@ const HEIGHT = 600;
 const SITECOUNT = 10000;
 const SEED = "1234567";
 const INITIAL_HEIGHT_SCALE_M = 500;
-const MAX_HEIGHT_SCALE_M = 8000;
+const MAX_HEIGHT_SCALE_M = 4000;
 const PEAKS = [1, .4, .4, .5];
-const HEIGHT_GEN_FALLOFF = .25;
+const HEIGHT_GEN_FALLOFF = .15;
+
 export class MainScene extends Phaser.Scene {
-  status = Status.NotStarted;
   width: number;
   height: number;
   siteCount: number;
@@ -27,7 +26,7 @@ export class MainScene extends Phaser.Scene {
   // mesh
   rng!: seedrandom.prng;
   voronoi!: Voronoi.VoronoiDiagram;
-  mesh!: IMeshItem[];
+  mesh!: Mesh;
   // graphics
   graphics = {} as {
     meshLines?: Phaser.GameObjects.Group;
@@ -66,8 +65,6 @@ export class MainScene extends Phaser.Scene {
   }
 
   updateGraphicsFromSimulation(args: ISimulationStepEvent) {
-
-
     switch (args.step) {
       case "initialize":
         break;
@@ -96,7 +93,17 @@ export class MainScene extends Phaser.Scene {
     this.rng = seedrandom(this.seed);
     this.voronoi = createVoronoi(this.siteCount, this.width, this.height, this.rng);
     console.log('Calculating mesh');
-    this.mesh = createMesh(this.voronoi, this.width, this.height);
+    this.mesh = new Mesh(this.voronoi, this.width, this.height);
+  }
+
+  assignMeshType() {
+    this.mesh.apply(m => {
+      if (m.height < 0) {
+        m.type = MeshType.Ocean;
+      }
+      m.input = getEmptyIO();
+      m.output = getEmptyIO();
+    });
   }
 
   drawVoronoi(depth: number) {
@@ -114,13 +121,6 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  assignMeshType() {
-    this.mesh.forEach(m => {
-      if (m.height < 0) {
-        m.type = MeshType.Ocean;
-      }
-    });
-  }
 
   redrawMesh(depth: number) {
     if (this.graphics.meshLines) {
@@ -130,7 +130,7 @@ export class MainScene extends Phaser.Scene {
   }
   drawMesh(depth: number): Phaser.GameObjects.Line[] {
     const lines = [] as Phaser.GameObjects.Line[];
-    this.mesh.forEach(m => {
+    this.mesh.apply(m => {
       // the filter is so we only draw connections once, not once from each side (double draw)
       m.neighbors.filter(n => n.dir === Direction.Left).forEach(n => {
         lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
@@ -164,7 +164,7 @@ export class MainScene extends Phaser.Scene {
     //       .setOrigin(0, 0);
     //   }
     // });
-    return this.mesh.map(m => {
+    return this.mesh.meshItems.map(m => {
       if (m.height > 0) {
         const colorAdjust = .3 + .7 * (m.height / MAX_HEIGHT_SCALE_M);
         const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
@@ -190,7 +190,7 @@ export class MainScene extends Phaser.Scene {
   }
   drawCoastline(depth: number): any {
     const edges = [] as Voronoi.Halfedge[];
-    this.mesh.forEach(m => {
+    this.mesh.apply(m => {
       if (m.type === MeshType.Ocean) {
         m.neighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
