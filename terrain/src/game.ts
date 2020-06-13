@@ -7,7 +7,7 @@ class Game extends Phaser.Game {
       type: Phaser.WEBGL,
       width: 600,
       height: 600,
-      zoom: 1,
+      zoom: 1.5,
       physics: {
         default: 'arcade'
       },

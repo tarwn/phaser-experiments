@@ -17,8 +17,5 @@
   "exclude": [
     "node_modules",
     "dist"
-  ],
-  "files": [
-    "src/typings/voronoi.d.ts"
   ]
 }
