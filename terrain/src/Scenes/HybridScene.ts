@@ -94,7 +94,8 @@ export class HybridScene extends Phaser.Scene {
         break;
       case "convert to hexagonal":
         this.redrawHeightMap(1, this.hexMesh || this.mesh);
-        this.redrawMesh(0, this.hexMesh || this.mesh, false);
+        // this.redrawMesh(0, this.hexMesh || this.mesh, false);
+        this.redrawMesh(0, this.mesh, true);
         break;
       case "identify ocean":
         this.redrawCoastline(2);
@@ -175,6 +176,9 @@ export class HybridScene extends Phaser.Scene {
         lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
           .setDepth(depth)
           .setOrigin(0, 0));
+        // lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x + (m.site.x - n.site.x) / 2, n.site.y + (m.site.y - n.site.y) / 2, 0x333333, 0.1)
+        //   .setDepth(depth)
+        //   .setOrigin(0, 0));
       });
     });
     return lines;
