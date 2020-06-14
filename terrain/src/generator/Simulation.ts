@@ -54,6 +54,13 @@ export class Simulation {
 
     this.stepIndex = 0;
     this.stepAttempts = 0;
+    this.steps.push({
+      name: "complete",
+      exec: () => {
+        console.timeEnd("simulation:total-time");
+      },
+      repeatUntil: NEVER_REPEAT
+    });
     return this;
   }
 
@@ -68,6 +75,10 @@ export class Simulation {
     if (this.isRunning)
       return;
     this.isRunning = true;
+
+    if (this.stepIndex == 0 && this.stepAttempts == 0) {
+      console.time("simulation:total-time");
+    }
 
     const step = this.steps[this.stepIndex];
     const count = ++this.stepAttempts;

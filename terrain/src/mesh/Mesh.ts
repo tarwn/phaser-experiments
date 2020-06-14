@@ -1,5 +1,5 @@
 import Voronoi from "voronoi";
-import { IMeshItem, Direction, IMeshNeighbor, MeshType, IO } from "./types";
+import { IMeshItem, Direction, MeshType, IO, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh } from "./types";
 
 export const createVoronoi = (siteCount: number, width: number, height: number, rng: seedrandom.prng): Voronoi.VoronoiDiagram => {
   const voronoi = new Voronoi();
@@ -19,14 +19,14 @@ export const getEmptyIO = (): IO => {
   } as IO;
 };
 
-const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem | null, halfEdge: Voronoi.Halfedge): IMeshNeighbor => ({
+const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem | null, halfEdge: Voronoi.Halfedge): IVoronoiMeshNeighbor => ({
   site,
   dir,
   meshItem,
   halfEdge
 });
 
-const createMesh = (voronoi: Voronoi.VoronoiDiagram): IMeshItem[] => {
+const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
   const mesh = voronoi.cells.map(c => {
     const neighbors = c.halfedges.map(h => h.edge.lSite == c.site
       ? createNeighbor(h.edge.rSite, Direction.Right, null, h)
@@ -48,8 +48,8 @@ const createMesh = (voronoi: Voronoi.VoronoiDiagram): IMeshItem[] => {
   return mesh;
 };
 
-export class Mesh {
-  meshItems: IMeshItem[];
+export class Mesh implements IMesh {
+  meshItems: IVoronoiMeshItem[];
   hash = new Map<string, IMeshItem>();
   edges: { north: IMeshItem[]; east: IMeshItem[]; south: IMeshItem[]; west: IMeshItem[]; };
   width: number;
@@ -103,7 +103,26 @@ export class Mesh {
     });
   }
 
-  apply(method: (m: IMeshItem) => void) {
+  apply(method: (m: IVoronoiMeshItem) => void) {
     this.meshItems.forEach(method);
   }
+
+  findClosest(x: number, y: number): IVoronoiMeshItem | undefined {
+    return this.meshItems.reduce((prev, cur) => {
+      if (prev == null) {
+        return cur;
+      }
+      else if (Math.abs(Phaser.Math.Distance.Between(cur.site.x, cur.site.y, x, y)) < Math.abs(Phaser.Math.Distance.Between(prev.site.x, prev.site.y, x, y))) {
+        return cur;
+      }
+      else {
+        return prev;
+      }
+    });
+  }
+
+  reduce<T>(method: (prev: T, cur: IMeshItem) => T, initial: T): T {
+    return this.meshItems.reduce((p, c) => method(p, c), initial);
+  }
+
 }

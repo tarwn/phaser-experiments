@@ -1,9 +1,8 @@
-import { IMeshItem } from "../../mesh/types";
-import { Mesh } from "../../mesh/Mesh";
+import { IMeshItem, IMesh } from "../../mesh/types";
 
 
 export const MountainIslandGenerator = {
-  adjustHeightMap: (mesh: Mesh, peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, rng: seedrandom.prng) => {
+  adjustHeightMap: (mesh: IMesh, peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, rng: seedrandom.prng) => {
     const peaks = peakHeights.map(p => {
       const margin = 200 * p / 1;
       return {
@@ -17,17 +16,7 @@ export const MountainIslandGenerator = {
     let lowestPoint = peaks[0].height;
     // seed heights from closest mesh nodes to peaks + add their neighbors to queue
     peaks.forEach(p => {
-      const closest = mesh.meshItems.reduce((prev, cur) => {
-        if (prev == null) {
-          return cur;
-        }
-        else if (Math.abs(Phaser.Math.Distance.Between(cur.site.x, cur.site.y, p.x, p.y)) < Math.abs(Phaser.Math.Distance.Between(prev.site.x, prev.site.y, p.x, p.y))) {
-          return cur;
-        }
-        else {
-          return prev;
-        }
-      });
+      const closest = mesh.findClosest(p.x, p.y);
       if (closest) {
         queue.push(closest);
         closest.height = p.height;
@@ -59,7 +48,7 @@ export const MountainIslandGenerator = {
     const totalRange = maxHeight - lowestPoint;
     const oceanDepth = maxDepth;
     const newRange = maxHeight + oceanDepth;
-    mesh.meshItems.forEach(m => {
+    mesh.apply(m => {
       m.height = (m.height - lowestPoint) / totalRange * newRange - oceanDepth;
     });
   }

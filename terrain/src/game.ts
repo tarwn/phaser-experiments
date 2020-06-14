@@ -1,4 +1,6 @@
-import { MainScene } from "./Scenes/MainScene";
+import { VoronoiDrivenScene } from "./Scenes/VoronoiDrivenScene";
+import { HexagonDrivenScene } from "./Scenes/HexagonDrivenScene";
+import { HybridScene } from "./Scenes/HybridScene";
 
 
 class Game extends Phaser.Game {
@@ -11,7 +13,11 @@ class Game extends Phaser.Game {
       physics: {
         default: 'arcade'
       },
-      scene: [MainScene]
+      scene: [
+        //VoronoiDrivenScene,
+        // HexagonDrivenScene,
+        HybridScene
+      ]
     });
   }
 }

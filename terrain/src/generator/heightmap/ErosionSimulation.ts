@@ -1,24 +1,24 @@
-import { Mesh } from "../../mesh/Mesh";
+import { IMesh } from "../../mesh/types";
 
 export const ErosionSimulation = {
-  initialize: (mesh: Mesh, maxDepth: number) => {
+  initialize: (mesh: IMesh, maxDepth: number) => {
     // dump a bunch of dirt, water, and erosion on it
-    mesh.meshItems.forEach(m => {
+    mesh.apply(m => {
       m.output.water = 40;
       m.input.water = 0;
       m.output.dirt = 0;
       m.input.dirt = 0;
 
       if (m.isMapEdge) {
-        m.height = -1 * maxDepth;
+        // m.height = -1 * maxDepth;
       }
     });
   },
 
-  adjustHeightMap: (mesh: Mesh): { waterRemaining: number } => {
+  adjustHeightMap: (mesh: IMesh): { waterRemaining: number } => {
     //return 0;
     // erosion loop
-    mesh.meshItems.forEach(m => {
+    mesh.apply(m => {
       const lowest = m.neighbors.reduce((prev, n) => {
         if (prev === null || prev.meshItem === null) {
           return n;
@@ -45,7 +45,7 @@ export const ErosionSimulation = {
     });
 
     // apply step + return outstanding water
-    const waterRemaining = mesh.meshItems.reduce((total, m) => {
+    const waterRemaining = mesh.reduce((total, m) => {
       if (m.isMapEdge) {
         m.output.water = 0;
         m.input.water = 0;

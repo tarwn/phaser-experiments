@@ -1,10 +1,10 @@
 import { makeNoise2D } from "open-simplex-noise";
-import { Mesh } from "../../mesh/Mesh";
+import { IMesh } from "../../mesh/types";
 
 export const BasicNoiseGenerator = {
-  createHeightMap: (mesh: Mesh, heightRange: number, rng: seedrandom.prng) => {
+  createHeightMap: (mesh: IMesh, heightRange: number, rng: seedrandom.prng) => {
     const noise2D = makeNoise2D(rng());
-    mesh.meshItems.forEach(m => {
+    mesh.apply(m => {
       if (m.isMapEdge) {
         m.height = -1 * noise2D(m.site.x, m.site.y) * heightRange;
       }

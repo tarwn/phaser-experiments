@@ -1,44 +1,56 @@
 import * as Phaser from "phaser";
-import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { Direction, MeshType } from "../mesh/types";
-import { createVoronoi, getEmptyIO, Mesh } from "../mesh/Mesh";
-import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
+import { MeshType } from "../mesh/types";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
-import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
+import { HexagonMesh } from "../mesh/HexagonMesh";
+import { getEmptyIO } from "../mesh/Mesh";
+import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
+import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 
 const WIDTH = 600;
 const HEIGHT = 600;
 const SITECOUNT = 10000;
+// assumes pointy top/horizantal row layout, size is roughly "4" in a 7:8: https://www.redblobgames.com/grids/hexagons/
+const HEXAGON_WIDTH = 7 * 9 / 10;
+const HEXAGON_HEIGHT = 8 * 9 / 10;
 const SEED = "1234567";
 const INITIAL_HEIGHT_SCALE_M = 500;
 const MAX_HEIGHT_SCALE_M = 4000;
 const PEAKS = [1, .4, .4, .5];
 const HEIGHT_GEN_FALLOFF = .15;
 
-export class MainScene extends Phaser.Scene {
+function wasteRandomNumbers(rng: seedrandom.prng) {
+  // wasting randomg numbers to match voronoi island for now
+  new Array(SITECOUNT).fill(undefined).map(() => ({
+    x: Math.round(rng() * WIDTH),
+    y: Math.round(rng() * HEIGHT)
+  }));
+}
+
+export class HexagonDrivenScene extends Phaser.Scene {
   width: number;
   height: number;
-  siteCount: number;
+  hexWidth: number;
+  hexHeight: number;
   seed: string;
   simulation!: Simulation;
   // mesh
   rng!: seedrandom.prng;
-  voronoi!: Voronoi.VoronoiDiagram;
-  mesh!: Mesh;
+  mesh!: HexagonMesh;
   // graphics
   graphics = {} as {
-    meshLines?: Phaser.GameObjects.Group;
+    mesh?: Phaser.GameObjects.Group;
     heightMap?: Phaser.GameObjects.Group;
     coastline?: any;
   };
 
   constructor() {
-    super("MainScene");
+    super("HexagonDrivenScene");
     this.width = WIDTH;
     this.height = HEIGHT;
-    this.siteCount = SITECOUNT;
+    this.hexWidth = HEXAGON_WIDTH;
+    this.hexHeight = HEXAGON_HEIGHT;
     this.seed = SEED;
   }
 
@@ -89,11 +101,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   initializeState() {
-    console.log(`Creating voronoi: seed "${this.seed}"`);
+    console.log(`Creating, seed "${this.seed}"`);
     this.rng = seedrandom(this.seed);
-    this.voronoi = createVoronoi(this.siteCount, this.width, this.height, this.rng);
+    // use up same number of cycles the other one did temporarily
+    wasteRandomNumbers(this.rng);
     console.log('Calculating mesh');
-    this.mesh = new Mesh(this.voronoi, this.width, this.height);
+    this.mesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height);
   }
 
   assignMeshType() {
@@ -106,39 +119,22 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  drawVoronoi(depth: number) {
-    return this.voronoi.cells.map(c => {
-      const poly = this.add.polygon(0, 0, c.halfedges.map(h => h.getStartpoint()));
-      poly.setStrokeStyle(2, 0x1a65ac);
-      poly.setDepth(depth);
-      poly.setOrigin(0, 0);
-      const center = this.add.circle(c.site.x, c.site.y, 2, 0x660000, 0.25);
-      center.setDepth(2);
-      return {
-        center,
-        polygon: poly
-      };
-    });
-  }
-
-
   redrawMesh(depth: number) {
-    if (this.graphics.meshLines) {
-      this.graphics.meshLines.clear(true, true);
+    if (this.graphics.mesh) {
+      this.graphics.mesh.clear(true, true);
     }
-    this.graphics.meshLines = this.add.group(this.drawMesh(depth));
+    this.graphics.mesh = this.add.group(this.drawMesh(depth));
   }
-  drawMesh(depth: number): Phaser.GameObjects.Line[] {
-    const lines = [] as Phaser.GameObjects.Line[];
+  drawMesh(depth: number): Phaser.GameObjects.Polygon[] {
+    const polygons = [] as Phaser.GameObjects.Polygon[];
     this.mesh.apply(m => {
-      // the filter is so we only draw connections once, not once from each side (double draw)
-      m.neighbors.filter(n => n.dir === Direction.Left).forEach(n => {
-        lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
-          .setDepth(depth)
-          .setOrigin(0, 0));
-      });
+      const p = this.add.polygon(0, 0, m.points)
+        .setStrokeStyle(1, 0x666633, 0.1)
+        .setOrigin(0, 0)
+        .setDepth(depth);
+      polygons.push(p);
     });
-    return lines;
+    return polygons;
   }
 
   redrawHeightMap(depth: number) {
@@ -147,39 +143,32 @@ export class MainScene extends Phaser.Scene {
     }
     this.graphics.heightMap = this.add.group(this.drawHeightMap(depth));
   }
+  getHeightMapColor(height: number) {
+    if (height > 0) {
+      const colorAdjust = .3 + .7 * (height / MAX_HEIGHT_SCALE_M);
+      const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
+      return {
+        color: color.color,
+        alpha: .5
+      };
+    }
+    else {
+      return {
+        color: 0x222299,
+        alpha: 1 - (Math.abs(height) / INITIAL_HEIGHT_SCALE_M) * .9
+      };
+    }
+  }
   drawHeightMap(depth: number) {
-    // return this.mesh.map(m => {
-    //   if (m.height > 0) {
-    //     const color = 0xddffdd;
-    //     const alpha = m.height / MAX_HEIGHT_SCALE_M;
-    //     return this.add.polygon(0, 0, m.points, color, alpha)
-    //       .setDepth(depth)
-    //       .setOrigin(0, 0);
-    //   }
-    //   else {
-    //     const color = 0x222299;
-    //     const alpha = 1 - Math.abs(m.height) / INITIAL_HEIGHT_SCALE_M;
-    //     return this.add.polygon(0, 0, m.points, color, alpha)
-    //       .setDepth(depth)
-    //       .setOrigin(0, 0);
-    //   }
-    // });
-    return this.mesh.meshItems.map(m => {
-      if (m.height > 0) {
-        const colorAdjust = .3 + .7 * (m.height / MAX_HEIGHT_SCALE_M);
-        const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
-        return this.add.polygon(0, 0, m.points, color.color, .5)
-          .setDepth(depth)
-          .setOrigin(0, 0);
-      }
-      else {
-        const color = 0x222299;
-        const alpha = 1 - (Math.abs(m.height) / INITIAL_HEIGHT_SCALE_M) * .9;
-        return this.add.polygon(0, 0, m.points, color, alpha)
-          .setDepth(depth)
-          .setOrigin(0, 0);
-      }
+    const polygons = [] as Phaser.GameObjects.Polygon[];
+    this.mesh.apply(m => {
+      const color = this.getHeightMapColor(m.height);
+      const p = this.add.polygon(0, 0, m.points, color.color, color.alpha)
+        .setOrigin(0, 0)
+        .setDepth(depth);
+      polygons.push(p);
     });
+    return polygons;
   }
 
   redrawCoastline(depth: number) {
@@ -189,23 +178,37 @@ export class MainScene extends Phaser.Scene {
     this.graphics.coastline = this.add.group(this.drawCoastline(depth));
   }
   drawCoastline(depth: number): any {
-    const edges = [] as Voronoi.Halfedge[];
+    const coastline = [] as Phaser.GameObjects.Line[];
     this.mesh.apply(m => {
       if (m.type === MeshType.Ocean) {
         m.neighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
-            edges.push(n.halfEdge);
+            const line = this.add.line(0, 0, n.edge.points[0].x, n.edge.points[0].y, n.edge.points[1].x, n.edge.points[1].y, 0x000000, 0.3)
+              .setOrigin(0, 0)
+              .setDepth(depth)
+              .setLineWidth(1);
+            coastline.push(line);
           }
         });
       }
     });
-    return edges.map(e => {
-      const start = e.getStartpoint();
-      const end = e.getEndpoint();
-      return this.add.line(0, 0, start.x, start.y, end.x, end.y, 0x000000, .3)
-        .setOrigin(0, 0)
-        .setDepth(depth);
-    });
+    return coastline;
   }
 
+  drawDebug(depth: number) {
+    this.mesh.apply(m => {
+      if (m.isMapEdge) {
+        this.add.polygon(0, 0, m.points, 0x0ff000, 1)
+          .setOrigin(0, 0)
+          .setDepth(depth + 1);
+        m.neighbors.forEach(n => {
+          if (n.meshItem?.type === MeshType.Land) {
+            this.add.polygon(0, 0, n.meshItem.points, 0xff0000, .1)
+              .setOrigin(0, 0)
+              .setDepth(depth);
+          }
+        });
+      }
+    });
+  }
 }
