@@ -1,7 +1,7 @@
 import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex } from "./types";
 import { getEmptyIO } from "./Mesh";
 
-interface IHexagonMeshItem extends IMeshItem {
+export interface IHexagonMeshItem extends IMeshItem {
   points: IVertex[];
   neighbors: IHexagonMeshNeighbor[];
   // cube or axial coords also?
@@ -16,7 +16,8 @@ interface IHexagonMeshNeighbor extends IMeshNeighbor {
 interface IHexagonEdge {
   q: number;
   r: number;
-  points: IVertex[]
+  points: IVertex[];
+  degrees: number;
 }
 
 export class HexagonMesh implements IMesh {
@@ -26,10 +27,22 @@ export class HexagonMesh implements IMesh {
   axialItems!: IHexagonMeshItem[][];
   axialColumnCount!: number;
   axialRowCount!: number;
+  edges: {
+    north: IHexagonMeshItem[],
+    east: IHexagonMeshItem[],
+    south: IHexagonMeshItem[],
+    west: IHexagonMeshItem[]
+  };
 
   constructor(hexWidth: number, hexHeight: number, width: number, height: number) {
     this.hexWidth = hexWidth;
     this.hexHeight = hexHeight;
+    this.edges = {
+      north: [] as IHexagonMeshItem[],
+      east: [] as IHexagonMeshItem[],
+      south: [] as IHexagonMeshItem[],
+      west: [] as IHexagonMeshItem[]
+    };
     this.createMeshItems(hexWidth, hexHeight, width, height);
   }
 
@@ -116,6 +129,20 @@ export class HexagonMesh implements IMesh {
         };
         meshItems.push(newItem);
         this.axialSet(newItem.axial.q, newItem.axial.r, newItem);
+
+        // add to edges list
+        if (x === 0) {
+          this.edges.west.push(newItem);
+        }
+        if (x === rowWidth - 1) {
+          this.edges.east.push(newItem);
+        }
+        if (y === 0) {
+          this.edges.north.push(newItem);
+        }
+        if (y >= bottomEdgeRow - 1) {
+          this.edges.south.push(newItem);
+        }
       }
     }
     this.meshItems = meshItems;
@@ -123,12 +150,12 @@ export class HexagonMesh implements IMesh {
     // calculate neighbors
     this.apply(m => {
       const neighbors = [
-        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r - 1), edge: { q: 1, r: -1, points: [m.points[0], m.points[1]] } },
-        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r + 0), edge: { q: 1, r: 0, points: [m.points[1], m.points[2]] } },
-        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r + 1), edge: { q: 0, r: 1, points: [m.points[2], m.points[3]] } },
-        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 1), edge: { q: -1, r: 1, points: [m.points[3], m.points[4]] } },
-        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 0), edge: { q: -1, r: 0, points: [m.points[4], m.points[5]] } },
-        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r - 1), edge: { q: 0, r: -1, points: [m.points[5], m.points[0]] } },
+        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r - 1), edge: { q: 1, r: -1, points: [m.points[0], m.points[1]], degrees: 300 } },
+        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r + 0), edge: { q: 1, r: 0, points: [m.points[1], m.points[2]], degrees: 0 } },
+        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r + 1), edge: { q: 0, r: 1, points: [m.points[2], m.points[3]], degrees: 60 } },
+        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 1), edge: { q: -1, r: 1, points: [m.points[3], m.points[4]], degrees: 120 } },
+        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 0), edge: { q: -1, r: 0, points: [m.points[4], m.points[5]], degrees: 180 } },
+        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r - 1), edge: { q: 0, r: -1, points: [m.points[5], m.points[0]], degrees: 240 } },
       ].filter(n => n.neighbor !== undefined) as { neighbor: IHexagonMeshItem, edge: IHexagonEdge }[];
       m.neighbors = neighbors.map(n => ({
         site: n.neighbor.site,

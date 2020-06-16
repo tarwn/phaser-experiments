@@ -42,7 +42,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
   graphics = {} as {
     mesh?: Phaser.GameObjects.Group;
     heightMap?: Phaser.GameObjects.Group;
-    coastline?: any;
+    coastline?: Phaser.GameObjects.Group;
   };
 
   constructor() {
@@ -194,6 +194,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
     });
     return coastline;
   }
+
 
   drawDebug(depth: number) {
     this.mesh.apply(m => {

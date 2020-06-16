@@ -1,13 +1,14 @@
 import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { Direction, MeshType, IMesh } from "../mesh/types";
+import { MeshType, IMesh, IWindMeasure } from "../mesh/types";
 import { createVoronoi, getEmptyIO, Mesh } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 import { HexagonMesh } from "../mesh/HexagonMesh";
+import { WindGenerator } from "../generator/weather/WindGenerator";
 
 const WIDTH = 600;
 const HEIGHT = 600;
@@ -19,11 +20,13 @@ const PEAKS = [1, .4, .4, .5];
 const HEIGHT_GEN_FALLOFF = .15;
 const HEXAGON_WIDTH = 7 * 9 / 10;
 const HEXAGON_HEIGHT = 8 * 9 / 10;
+const INITIAL_WIND_SPEED_MPS = 6;
 
 export class HybridScene extends Phaser.Scene {
   width: number;
   height: number;
   siteCount: number;
+  initialWind: IWindMeasure;
   seed: string;
   simulation!: Simulation;
   // mesh
@@ -36,7 +39,8 @@ export class HybridScene extends Phaser.Scene {
   graphics = {} as {
     meshLines?: Phaser.GameObjects.Group;
     heightMap?: Phaser.GameObjects.Group;
-    coastline?: any;
+    coastline?: Phaser.GameObjects.Group;
+    windmap?: Phaser.GameObjects.Group;
   };
   hexWidth: number;
   hexHeight: number;
@@ -49,6 +53,7 @@ export class HybridScene extends Phaser.Scene {
     this.seed = SEED;
     this.hexWidth = HEXAGON_WIDTH;
     this.hexHeight = HEXAGON_HEIGHT;
+    this.initialWind = { degrees: 60, strength: INITIAL_WIND_SPEED_MPS };
   }
 
   // stuck on erosion - hits a steady state too early
@@ -63,6 +68,7 @@ export class HybridScene extends Phaser.Scene {
       .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.hexMesh || this.mesh))
       .until((i, out, last) => i >= 10 && out != last)
       .queue("identify ocean", () => this.assignMeshType())
+      .queue("calculate initial winds", () => WindGenerator.calculateWindEffect(this.hexMesh as HexagonMesh, this.initialWind))
       .complete();
 
     this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
@@ -88,6 +94,7 @@ export class HybridScene extends Phaser.Scene {
         this.redrawHeightMap(1, this.hexMesh || this.mesh);
         break;
       case "erosion continue":
+        // console.log(args);
         if (args.attemptNumber % 4 === 0) {
           this.redrawHeightMap(1, this.hexMesh || this.mesh);
         }
@@ -100,6 +107,8 @@ export class HybridScene extends Phaser.Scene {
       case "identify ocean":
         this.redrawCoastline(2);
         break;
+      case "calculate initial winds":
+        this.redrawWindMap(3);
     }
   }
 
@@ -254,4 +263,27 @@ export class HybridScene extends Phaser.Scene {
   }
 
 
+  redrawWindMap(depth: number) {
+    if (this.graphics.windmap) {
+      this.graphics.windmap.clear(true, true);
+    }
+    this.graphics.windmap = this.add.group(this.drawWindMap(depth));
+  }
+  drawWindMap(depth: number): any {
+    const windmap = [] as Phaser.GameObjects.Line[];
+    this.hexMesh?.apply(m => {
+      if (m.output.wind.length > 0) {
+        m.output.wind.forEach(w => {
+          const wind = this.add.line(m.site.x, m.site.y, 0, 0, (this.hexWidth + this.hexHeight) / 2, 0)
+            .setOrigin(0, 0)
+            .setDepth(depth)
+            .setRotation(Phaser.Math.DegToRad(w.degrees))
+            .setStrokeStyle(w.strength, 0x660099, .25);
+          windmap.push(wind);
+        });
+      }
+    });
+    // console.log(windmap);
+    return windmap;
+  }
 }

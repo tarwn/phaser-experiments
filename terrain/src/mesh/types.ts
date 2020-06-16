@@ -10,9 +10,14 @@ export enum MeshType {
 }
 
 export interface IO {
-  wind: { x: number, y: number, strength: number }[];
+  wind: IWindMeasure[];
   water: number;
   dirt: number;
+}
+
+export interface IWindMeasure {
+  degrees: number;
+  strength: number;
 }
 
 export interface IMesh {
