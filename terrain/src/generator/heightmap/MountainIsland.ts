@@ -2,12 +2,12 @@ import { IMeshItem, IMesh } from "../../mesh/types";
 
 
 export const MountainIslandGenerator = {
-  adjustHeightMap: (mesh: IMesh, peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, rng: seedrandom.prng) => {
+  adjustHeightMap: (mesh: IMesh, peakHeights: number[], peakFalloffRate: number, maxHeight: number, maxDepth: number, width: number, height: number, margin: number, rng: seedrandom.prng) => {
     const peaks = peakHeights.map(p => {
-      const margin = 200 * p / 1;
+      const marginFactor = margin * p / 1;
       return {
-        x: Math.floor(rng() * (width - margin * 2)) + margin,
-        y: Math.floor(rng() * (height - margin * 2)) + margin,
+        x: Math.floor(rng() * (width - marginFactor * 2)) + marginFactor,
+        y: Math.floor(rng() * (height - marginFactor * 2)) + marginFactor,
         height: p * maxHeight
       };
     });

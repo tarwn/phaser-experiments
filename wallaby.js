@@ -1,16 +1,16 @@
 module.exports = function (wallaby) {
   return {
     files: [
-      'src/**/*.ts',
-      '!node_modules/**/',
-      '!src/**/*.spec.ts'
+      'terrain/src/**/*',
+      '!terrain/src/**/*.spec.ts',
+      '!terrain/src/typings/*.ts'
     ],
     tests: [
-      'src/**/*.spec.ts'
+      'terrain/src/**/*.spec.ts'
     ],
 
     compilers: {
-      'src/**/*.ts': wallaby.compilers.typeScript({
+      'terrain/src/**/*.ts': wallaby.compilers.typeScript({
         isolatedModules: true
       })
     },
@@ -23,9 +23,11 @@ module.exports = function (wallaby) {
     setup: function (wallaby) {
       var jestConfig = require(wallaby.localProjectDir + '/jest.config.js');
       jestConfig.moduleDirectories = [
-        'node_modules'
+        'node_modules',
+        '<rootdir>/terrain/node_modules'
       ];
       wallaby.testFramework.configure(jestConfig);
     },
+    trace: true
   };
 };

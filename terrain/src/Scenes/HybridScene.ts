@@ -10,16 +10,16 @@ import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 import { HexagonMesh } from "../mesh/HexagonMesh";
 import { WindGenerator } from "../generator/weather/WindGenerator";
 
-const WIDTH = 600;
-const HEIGHT = 600;
+const WIDTH = 900;
+const HEIGHT = 900;
 const SITECOUNT = 10000;
 const SEED = "1234567";
 const INITIAL_HEIGHT_SCALE_M = 500;
 const MAX_HEIGHT_SCALE_M = 4000;
 const PEAKS = [1, .4, .4, .5];
 const HEIGHT_GEN_FALLOFF = .15;
-const HEXAGON_WIDTH = 7 * 9 / 10;
-const HEXAGON_HEIGHT = 8 * 9 / 10;
+const HEXAGON_WIDTH = 7 * 1.2;
+const HEXAGON_HEIGHT = 8 * 1.2;
 const INITIAL_WIND_SPEED_MPS = 6;
 
 export class HybridScene extends Phaser.Scene {
@@ -53,7 +53,7 @@ export class HybridScene extends Phaser.Scene {
     this.seed = SEED;
     this.hexWidth = HEXAGON_WIDTH;
     this.hexHeight = HEXAGON_HEIGHT;
-    this.initialWind = { degrees: 60, strength: INITIAL_WIND_SPEED_MPS };
+    this.initialWind = { degrees: 45, strength: INITIAL_WIND_SPEED_MPS };
   }
 
   // stuck on erosion - hits a steady state too early
@@ -62,7 +62,7 @@ export class HybridScene extends Phaser.Scene {
     this.simulation = new Simulation()
       .queue("initializeState", () => this.initializeState())
       .queue("basic noise", () => BasicNoiseGenerator.createHeightMap(this.mesh, INITIAL_HEIGHT_SCALE_M, this.rng))
-      .queue("mountain island", () => MountainIslandGenerator.adjustHeightMap(this.hexMesh || this.mesh, PEAKS, HEIGHT_GEN_FALLOFF, MAX_HEIGHT_SCALE_M, INITIAL_HEIGHT_SCALE_M, this.width, this.height, this.rng))
+      .queue("mountain island", () => MountainIslandGenerator.adjustHeightMap(this.hexMesh || this.mesh, PEAKS, HEIGHT_GEN_FALLOFF, MAX_HEIGHT_SCALE_M, INITIAL_HEIGHT_SCALE_M, this.width, this.height, this.width / 3, this.rng))
       .queue("convert to hexagonal", () => this.createHexagonalGrid())
       .queue("erosion start", () => ErosionSimulation.initialize(this.hexMesh || this.mesh, INITIAL_HEIGHT_SCALE_M))
       .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.hexMesh || this.mesh))

@@ -8,8 +8,8 @@ import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 
-const WIDTH = 600;
-const HEIGHT = 600;
+const WIDTH = 900;
+const HEIGHT = 900;
 const SITECOUNT = 10000;
 const SEED = "1234567";
 const INITIAL_HEIGHT_SCALE_M = 500;
@@ -48,7 +48,7 @@ export class VoronoiDrivenScene extends Phaser.Scene {
     this.simulation = new Simulation()
       .queue("initializeState", () => this.initializeState())
       .queue("basic noise", () => BasicNoiseGenerator.createHeightMap(this.mesh, INITIAL_HEIGHT_SCALE_M, this.rng))
-      .queue("mountain island", () => MountainIslandGenerator.adjustHeightMap(this.mesh, PEAKS, HEIGHT_GEN_FALLOFF, MAX_HEIGHT_SCALE_M, INITIAL_HEIGHT_SCALE_M, this.width, this.height, this.rng))
+      .queue("mountain island", () => MountainIslandGenerator.adjustHeightMap(this.mesh, PEAKS, HEIGHT_GEN_FALLOFF, MAX_HEIGHT_SCALE_M, INITIAL_HEIGHT_SCALE_M, this.width, this.height, this.width / 3, this.rng))
       .queue("erosion start", () => ErosionSimulation.initialize(this.mesh, INITIAL_HEIGHT_SCALE_M))
       .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.mesh))
       .until((i, out, last) => i >= 10 && out != last)

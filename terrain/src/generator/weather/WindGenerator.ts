@@ -20,7 +20,7 @@ export enum Compass {
 
 
 // wind output of a particular mesh item
-const calculateWindOutput = (meshItem: IMeshItem): IWindMeasure => {
+export const calculateWindOutput = (meshItem: IMeshItem): IWindMeasure => {
   // TODO combine the inputs to produce an output
   //  this would be easier with vectors
   const totalStrength = meshItem.input.wind.reduce((ttl, w) => ttl + w.strength, 0);
@@ -33,7 +33,7 @@ const calculateWindOutput = (meshItem: IMeshItem): IWindMeasure => {
 };
 
 // wind output on neighbors
-const calculateNeighborStrengths = (wind: IWindMeasure) => {
+export const calculateNeighborStrengths = (wind: IWindMeasure) => {
   // list of sides on hexagon
   const sides = [0, 60, 120, 180, 240, 300];
   const sideStrengths = {
@@ -51,8 +51,8 @@ const calculateNeighborStrengths = (wind: IWindMeasure) => {
     }
     else if (wind.degrees > side && wind.degrees < side + 60) {
       const nextSide = (side + 60) % 360;
-      sideStrengths[side] = wind.strength * (wind.degrees - side) / 60;
-      sideStrengths[nextSide] = wind.strength * (side + 60 - wind.degrees) / 60;
+      sideStrengths[side] = wind.strength * (side + 60 - wind.degrees) / 60;
+      sideStrengths[nextSide] = wind.strength * (wind.degrees - side) / 60;
     }
   });
   return sideStrengths;
@@ -122,3 +122,6 @@ export const WindGenerator = {
     console.log(mesh);
   }
 };
+
+
+// TODO - wind is not adding up correctly when split between tiles

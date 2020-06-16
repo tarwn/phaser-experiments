@@ -7,14 +7,14 @@ class Game extends Phaser.Game {
   constructor() {
     super({
       type: Phaser.WEBGL,
-      width: 600,
-      height: 600,
-      zoom: 1.5,
+      width: 900,
+      height: 900,
+      zoom: 1,
       physics: {
         default: 'arcade'
       },
       scene: [
-        //VoronoiDrivenScene,
+        // VoronoiDrivenScene,
         // HexagonDrivenScene,
         HybridScene
       ]
