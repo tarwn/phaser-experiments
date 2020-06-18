@@ -20,6 +20,7 @@ const PEAKS = [1, .4, .4, .5];
 const HEIGHT_GEN_FALLOFF = .15;
 const HEXAGON_WIDTH = 7 * 1.2;
 const HEXAGON_HEIGHT = 8 * 1.2;
+const PX_TO_KM = 0.5; // horizantal/hex pixels per km
 const INITIAL_WIND_SPEED_MPS = 6;
 
 export class HybridScene extends Phaser.Scene {
@@ -44,6 +45,7 @@ export class HybridScene extends Phaser.Scene {
   };
   hexWidth: number;
   hexHeight: number;
+  pxToKilometers: number;
 
   constructor() {
     super("HybridScene");
@@ -53,7 +55,8 @@ export class HybridScene extends Phaser.Scene {
     this.seed = SEED;
     this.hexWidth = HEXAGON_WIDTH;
     this.hexHeight = HEXAGON_HEIGHT;
-    this.initialWind = { degrees: 45, strength: INITIAL_WIND_SPEED_MPS };
+    this.initialWind = { degrees: 60, strength: INITIAL_WIND_SPEED_MPS };
+    this.pxToKilometers = PX_TO_KM;
   }
 
   // stuck on erosion - hits a steady state too early
@@ -131,7 +134,7 @@ export class HybridScene extends Phaser.Scene {
   }
 
   createHexagonalGrid() {
-    this.hexMesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height);
+    this.hexMesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height, this.pxToKilometers);
     this.mesh.apply(m => {
       const hexM = this.hexMesh?.findClosest(m.site.x, m.site.y);
       if (hexM) {
@@ -270,15 +273,36 @@ export class HybridScene extends Phaser.Scene {
     this.graphics.windmap = this.add.group(this.drawWindMap(depth));
   }
   drawWindMap(depth: number): any {
-    const windmap = [] as Phaser.GameObjects.Line[];
+    // const windmap = [] as Phaser.GameObjects.Line[];
+    // this.hexMesh?.apply(m => {
+    //   if (m.output.wind.length > 0) {
+    //     m.output.wind.forEach(w => {
+    //       const wind = this.add.line(m.site.x, m.site.y, 0, 0, (this.hexWidth + this.hexHeight) / 2, 0)
+    //         .setOrigin(0, 0)
+    //         .setDepth(depth)
+    //         .setRotation(Phaser.Math.DegToRad(w.degrees))
+    //         .setStrokeStyle(w.strength, 0x660099, .25);
+    //       windmap.push(wind);
+    //     });
+    //   }
+    // });
+    const windmap = [] as Phaser.GameObjects.Polygon[];
     this.hexMesh?.apply(m => {
-      if (m.output.wind.length > 0) {
+      if (m.output.wind.length > 0 && m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
         m.output.wind.forEach(w => {
-          const wind = this.add.line(m.site.x, m.site.y, 0, 0, (this.hexWidth + this.hexHeight) / 2, 0)
+          const points = [
+            { x: 0, y: 0 },
+            { x: -3, y: 3 },
+            { x: -3, y: 1 },
+            { x: -w.strength / 2, y: 1 },
+            { x: -w.strength / 2, y: -1 },
+            { x: -3, y: -1 },
+            { x: -3, y: -3 }
+          ];
+          const wind = this.add.polygon(m.site.x, m.site.y, points, 0x660099, 1)
             .setOrigin(0, 0)
             .setDepth(depth)
-            .setRotation(Phaser.Math.DegToRad(w.degrees))
-            .setStrokeStyle(w.strength, 0x660099, .25);
+            .setRotation(Phaser.Math.DegToRad(w.degrees));
           windmap.push(wind);
         });
       }

@@ -14,9 +14,9 @@ class Game extends Phaser.Game {
         default: 'arcade'
       },
       scene: [
-        // VoronoiDrivenScene,
-        // HexagonDrivenScene,
-        HybridScene
+        HybridScene,
+        VoronoiDrivenScene,
+        HexagonDrivenScene
       ]
     });
   }

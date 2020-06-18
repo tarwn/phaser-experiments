@@ -33,10 +33,12 @@ export class HexagonMesh implements IMesh {
     south: IHexagonMeshItem[],
     west: IHexagonMeshItem[]
   };
+  pxToKilometer: number;
 
-  constructor(hexWidth: number, hexHeight: number, width: number, height: number) {
+  constructor(hexWidth: number, hexHeight: number, width: number, height: number, pxToKilometer: number) {
     this.hexWidth = hexWidth;
     this.hexHeight = hexHeight;
+    this.pxToKilometer = pxToKilometer;
     this.edges = {
       north: [] as IHexagonMeshItem[],
       east: [] as IHexagonMeshItem[],

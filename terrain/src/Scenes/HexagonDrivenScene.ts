@@ -17,6 +17,7 @@ const HEXAGON_HEIGHT = 8 * 1.2;
 const SEED = "1234567";
 const INITIAL_HEIGHT_SCALE_M = 500;
 const MAX_HEIGHT_SCALE_M = 4000;
+const PX_TO_KM = 0.5; // horizantal/hex pixels per km
 const PEAKS = [1, .4, .4, .5];
 const HEIGHT_GEN_FALLOFF = .15;
 
@@ -33,6 +34,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
   height: number;
   hexWidth: number;
   hexHeight: number;
+  pxToKilometers: number;
   seed: string;
   simulation!: Simulation;
   // mesh
@@ -51,6 +53,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
     this.height = HEIGHT;
     this.hexWidth = HEXAGON_WIDTH;
     this.hexHeight = HEXAGON_HEIGHT;
+    this.pxToKilometers = PX_TO_KM;
     this.seed = SEED;
   }
 
@@ -106,7 +109,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
     // use up same number of cycles the other one did temporarily
     wasteRandomNumbers(this.rng);
     console.log('Calculating mesh');
-    this.mesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height);
+    this.mesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height, this.pxToKilometers);
   }
 
   assignMeshType() {
