@@ -300,7 +300,7 @@ export class HybridScene extends Phaser.Scene {
             { x: -3, y: -1 },
             { x: -3, y: -3 }
           ];
-          const wind = this.add.polygon(m.site.x, m.site.y, points, 0x660099, 1)
+          const wind = this.add.polygon(m.site.x, m.site.y, points, 0xccccff, 0.25)
             .setOrigin(0, 0)
             .setDepth(depth)
             .setRotation(Phaser.Math.DegToRad(w.degrees));
