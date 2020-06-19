@@ -34,7 +34,11 @@ export const calculateSlopeImpactOnWind = (source: IWindLocation, target: IWindL
 
 
 // wind output of a particular mesh item
-export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: number): IWindMeasure => {
+export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: number): IWindMeasure | undefined => {
+  if (meshItem.input.wind.length == 0) {
+    return undefined;
+  }
+
   // change strength
   //  up slope slows down
   //  down slope speeds up - but not really in the real world, eddies, etc but good enough
@@ -104,82 +108,93 @@ export const calculateNeighborStrengths = (wind: IWindMeasure) => {
 
 export const applyInitialWind = (mesh: HexagonMesh, initialWind: IWindMeasure) => {
   const initialWinds = calculateNeighborStrengths(initialWind);
-  console.log(initialWinds);
 
   // seed the sides that would be receiving initial wind with the percentage that they would receive
   const queue = [] as IHexagonMeshItem[];
   if (initialWinds[0] && initialWinds[0] > 0) {
     mesh.edges.west.forEach(m => {
-      m.input.wind.push({ degrees: 0, strength: initialWinds[0] });
+      m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[0] });
       if (m.input.wind.length < 2)
         queue.push(m);
     });
   }
   if (initialWinds[60] && initialWinds[60] > 0) {
-    mesh.edges.west.forEach(m => {
-      m.input.wind.push({ degrees: 60, strength: initialWinds[60] });
+    // don't add NW corner if single direction, add once if initial wind is from diff direction
+    const corner = mesh.edges.north[0];
+    mesh.edges.west.forEach((m, i) => {
+      if (i % 2 == 0) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[60] });
+      }
       if (m.input.wind.length < 2)
         queue.push(m);
     });
     mesh.edges.north.forEach(m => {
-      // ensure we don't double add on corners
-      if (!m.input.wind.find(w => w.degrees == 60)) {
-        m.input.wind.push({ degrees: 60, strength: initialWinds[60] });
-        if (m.input.wind.length < 2)
-          queue.push(m);
+      if (m != corner) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[60] });
       }
+      if (m.input.wind.length < 2)
+        queue.push(m);
     });
   }
   if (initialWinds[120] && initialWinds[120] > 0) {
+    // don't add NE corner if single direction, add once if initial wind is from diff direction
+    const corner = mesh.edges.east[0];
     mesh.edges.east.forEach(m => {
-      m.input.wind.push({ degrees: 120, strength: initialWinds[120] });
+      if (i % 2 == 0) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[120] });
+      }
       if (m.input.wind.length < 2)
         queue.push(m);
     });
     mesh.edges.north.forEach(m => {
-      // ensure we don't double add on corners
-      if (!m.input.wind.find(w => w.degrees == 120)) {
-        m.input.wind.push({ degrees: 120, strength: initialWinds[120] });
-        if (m.input.wind.length < 2)
-          queue.push(m);
+      if (m != corner) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[120] });
       }
+      if (m.input.wind.length < 2)
+        queue.push(m);
     });
   }
   if (initialWinds[180] && initialWinds[180] > 0) {
+    // don't add corner if single direction wind, add once if initial wind is from diff direction
     mesh.edges.east.forEach(m => {
-      m.input.wind.push({ degrees: 180, strength: initialWinds[180] });
+      m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[180] });
       if (m.input.wind.length < 2)
         queue.push(m);
     });
   }
   if (initialWinds[240] && initialWinds[240] > 0) {
+    const corner = mesh.edges.south[mesh.edges.south.length - 1];
     mesh.edges.east.forEach(m => {
-      m.input.wind.push({ degrees: 240, strength: initialWinds[240] });
+      if (i % 2 == 0) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[240] });
+      }
       if (m.input.wind.length < 2)
         queue.push(m);
     });
     mesh.edges.south.forEach(m => {
-      // ensure we don't double add on corners
-      if (!m.input.wind.find(w => w.degrees == 240)) {
-        m.input.wind.push({ degrees: 240, strength: initialWinds[240] });
-        if (m.input.wind.length < 2)
-          queue.push(m);
+      if (m != corner) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[240] });
       }
+      if (m.input.wind.length < 2)
+        queue.push(m);
     });
   }
   if (initialWinds[300] && initialWinds[300] > 0) {
+    // don't add corner if single direction wind, add once if initial wind is from diff direction
+    const corner = mesh.edges.south[0];
     mesh.edges.west.forEach(m => {
-      m.input.wind.push({ degrees: 300, strength: initialWinds[300] });
+      if (i % 2 == 0) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[300] });
+      }
       if (m.input.wind.length < 2)
         queue.push(m);
     });
     mesh.edges.south.forEach(m => {
-      // ensure we don't double add on corners
-      if (!m.input.wind.find(w => w.degrees == 300)) {
-        m.input.wind.push({ degrees: 300, strength: initialWinds[300] });
-        if (m.input.wind.length < 2)
-          queue.push(m);
+      if (m != corner) {
+        m.input.wind.push({ degrees: initialWind.degrees, strength: initialWinds[300] });
       }
+      if (m.input.wind.length < 2)
+        queue.push(m);
     });
   }
 
@@ -189,53 +204,63 @@ export const applyInitialWind = (mesh: HexagonMesh, initialWind: IWindMeasure) =
 export const WindGenerator = {
   calculateWindEffect: (mesh: HexagonMesh, initialWind: IWindMeasure) => {
     // seed the sides that would be receiving initial wind with the percentage that they would receive
-    let queue = applyInitialWind(mesh, initialWind);
-    let nextQueue = [] as IHexagonMeshItem[];
+    const queue = applyInitialWind(mesh, initialWind);
+    const isIncluded = new Map<{ q: number, r: number }, boolean>();
+    queue.forEach(m => isIncluded.set(m.axial, true));
+    // console.log(mesh.meshItems.map(m => `${m.axial.r},${m.axial.q}: ${JSON.stringify(m.input.wind)}`).join("\n"));
 
     let counter = 0;
     let numChanged = -1;
     while (counter < 200 && numChanged !== 0 && numChanged < 100000) {
       counter++;
 
-      // add edge inputs on subsequent loops
+      // push outputs to next inputs (including initial edge from outside wind)
       if (counter > 1) {
         applyInitialWind(mesh, initialWind);
       }
-
       // process all outputs into new inputs on neighbors
       for (let i = 0; i < queue.length; i++) {
-        const output = calculateWindOutput(queue[i], mesh.pxToKilometer);
-        const neighborShares = calculateNeighborStrengths(output);
-        queue[i].neighbors.forEach(n => {
-          if (neighborShares[n.edge.degrees]) {
-            console.log(`applying ${neighborShares[n.edge.degrees]} at ${n.edge.degrees} degrees, from ${queue[i].axial.q},${queue[i].axial.r} to ${n.meshItem.axial.q},${n.meshItem.axial.r}`);
-            n.meshItem.input.wind.push({ degrees: output.degrees, strength: neighborShares[n.edge.degrees] });
-            if (n.meshItem.input.wind.length == 1) {
-              nextQueue.push(n.meshItem);
+        if (queue[i].output.wind.length > 0) {
+          // const output = calculateWindOutput(queue[i], mesh.pxToKilometer);
+          const output = queue[i].output.wind[0];
+          const neighborShares = calculateNeighborStrengths(output);
+          queue[i].neighbors.forEach(n => {
+            if (neighborShares[n.edge.degrees]) {
+              // attempt to skip over edges that wil get doubled up inputs
+              if (!n.meshItem.isMapEdge || !n.meshItem.input.wind.find(w => w.degrees == output.degrees && w.strength == output.strength)) {
+                n.meshItem.input.wind.push({ degrees: output.degrees, strength: neighborShares[n.edge.degrees] });
+              }
+              if (!isIncluded.has(n.meshItem.axial)) {
+                isIncluded.set(n.meshItem.axial, true);
+                queue.push(n.meshItem);
+              }
             }
-          }
-        });
+          });
+        }
       }
 
       // apply received inputs to produce next output
+      //  - calculate new output and apply if changed
       //  - clear input for next round (or no round if this is stable)
       //  - return num changed to see if we're stable yet
-      numChanged = nextQueue.reduce((ttl, m) => {
+      numChanged = queue.reduce((ttl, m) => {
         const original = m.output.wind;
-        m.output.wind = [calculateWindOutput(m, mesh.pxToKilometer)];
+        const newOutput = calculateWindOutput(m, mesh.pxToKilometer);
+        if (newOutput) {
+          m.output.wind = [newOutput];
+        }
         m.input.wind = [];
-        if (original.length !== m.output.wind.length || original[0].degrees !== m.output.wind[0].strength || original[0].degrees != m.output.wind[0].strength) {
+        if (original.length !== m.output.wind.length || original != m.output.wind) {
           return 1 + ttl;
         }
         else {
           return ttl;
         }
       }, 0);
-      console.log(`Wind simulation, loop ${counter} ${numChanged} hexes updated`);
-      queue = nextQueue;
-      nextQueue = [];
+      // console.log(mesh.meshItems.map(m => `${m.axial.r},${m.axial.q}: ${JSON.stringify(m.output.wind)}`).join("\n"));
+
+      // console.log(`Wind simulation, loop ${counter} ${numChanged} hexes updated`);
     }
-    // console.log(mesh);
   }
 };
 

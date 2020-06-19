@@ -73,7 +73,8 @@ export class HexagonMesh implements IMesh {
     const halfHexHeight = hexHeight / 2;
     const threeQuarterHexHeight = quarterHexHeight + halfHexHeight;
     const evenRowWidth = Math.ceil((width + halfHexWidth) / hexWidth);
-    const oddRowWidth = Math.ceil(width / hexWidth);
+    // const oddRowWidth = Math.ceil(width / hexWidth);
+    const oddRowWidth = evenRowWidth;
     const rowCount = 1 + Math.floor(height / threeQuarterHexHeight);
     const bottomEdgeRow = ((-threeQuarterHexHeight + (rowCount * hexHeight)) - width) > threeQuarterHexHeight ? rowCount - 1 : rowCount;
     const meshItems = [] as IHexagonMeshItem[];
@@ -120,7 +121,7 @@ export class HexagonMesh implements IMesh {
         const newItem = {
           site,
           axial,
-          isMapEdge: (x === 0 || x === rowWidth - 1 || y === 0 || y >= bottomEdgeRow - 1),
+          isMapEdge: (x === 0 || x === rowWidth - 1 || y === 0 || y === bottomEdgeRow),
           height: 0,
           input: getEmptyIO(),
           output: getEmptyIO(),
@@ -142,7 +143,7 @@ export class HexagonMesh implements IMesh {
         if (y === 0) {
           this.edges.north.push(newItem);
         }
-        if (y >= bottomEdgeRow - 1) {
+        if (y === bottomEdgeRow) {
           this.edges.south.push(newItem);
         }
       }
@@ -165,6 +166,14 @@ export class HexagonMesh implements IMesh {
         edge: n.edge
       }));
     });
+
+    // make sure edges are populated correctly
+    if (this.edges.west.length !== this.edges.east.length) {
+      throw new Error(`East (${this.edges.east.length}) and West (${this.edges.west.length})edges are different sizes`);
+    }
+    if (this.edges.north.length !== this.edges.south.length) {
+      throw new Error(`North (${this.edges.north.length}) and South (${this.edges.south.length})edges are different sizes`);
+    }
 
     // debug output for storage of axial items
     // console.log(this.axialItems.map((r => {

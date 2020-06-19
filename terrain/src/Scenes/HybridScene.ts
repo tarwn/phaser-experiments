@@ -232,7 +232,7 @@ export class HybridScene extends Phaser.Scene {
   drawHeightMap(depth: number, mesh: IMesh) {
     const polygons = [] as Phaser.GameObjects.Polygon[];
     mesh.apply(m => {
-      const color = this.getHeightMapColor(m.height);
+      const color = m.isMapEdge ? { color: 0xff0000, alpha: 1 } : this.getHeightMapColor(m.height);
       const p = this.add.polygon(0, 0, m.points, color.color, color.alpha)
         .setOrigin(0, 0)
         .setDepth(depth);

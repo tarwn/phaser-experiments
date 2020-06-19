@@ -50,8 +50,17 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, 1);
 
-      expect(output.degrees).toBe(320);
-      expect(output.strength).toBe(8.2);
+      expect(output?.degrees).toBe(320);
+      expect(output?.strength).toBe(8.2);
+    });
+
+    it("returns empty set if no inputs", () => {
+      const meshItem = getSampleMeshItem();
+      meshItem.input.wind = [];
+
+      const output = calculateWindOutput(meshItem, 1);
+
+      expect(output).toEqual(undefined);
     });
 
     it("maintains the wind strength when travelling on level terrain", () => {
@@ -72,8 +81,8 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, pxPerKilometer);
 
-      expect(output.degrees).toBe(45);
-      expect(output.strength).toBe(10);
+      expect(output?.degrees).toBe(45);
+      expect(output?.strength).toBe(10);
       // console.log(output.strength);
     });
 
@@ -95,8 +104,8 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, pxPerKilometer);
 
-      expect(output.degrees).toBe(45);
-      expect(output.strength).toBe(10);
+      expect(output?.degrees).toBe(45);
+      expect(output?.strength).toBe(10);
       // console.log(output.strength);
     });
 
@@ -119,8 +128,8 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, pxPerKilometer);
 
-      expect(output.degrees).toBe(45);
-      expect(output.strength).toBeLessThan(10);
+      expect(output?.degrees).toBe(45);
+      expect(output?.strength).toBeLessThan(10);
       // console.log(output.strength);
     });
 
@@ -142,10 +151,11 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, pxPerKilometer);
 
-      expect(output.degrees).toBe(45);
-      expect(output.strength).toBeGreaterThan(10);
+      expect(output?.degrees).toBe(45);
+      expect(output?.strength).toBeGreaterThan(10);
       // console.log(output.strength);
     });
+
   });
 
   describe("calculateNeighborStrengths", () => {
@@ -223,7 +233,7 @@ describe("WindGenerator", () => {
         }
       });
     });
-    it("applies 60 degree wind to west + north cells only", () => {
+    it("applies 60 degree wind to west + north cells only - but not NW corner", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 60, strength: 10 };
@@ -232,12 +242,21 @@ describe("WindGenerator", () => {
 
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      const corner = mesh.edges.north[0];
+      if (corner) {
+        expect(corner.input.wind).toEqual([]);
+        alreadyChecked.set(corner.axial, true);
+      }
       mesh.edges.west.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        }
         alreadyChecked.set(m.axial, true);
       });
       mesh.edges.north.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        }
         alreadyChecked.set(m.axial, true);
       });
       mesh.meshItems.forEach(m => {
@@ -246,7 +265,7 @@ describe("WindGenerator", () => {
         }
       });
     });
-    it("applies 120 degree wind to east + north cells only", () => {
+    it("applies 120 degree wind to east + north cells only - not not NE corner", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 120, strength: 10 };
@@ -254,13 +273,22 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      const corner = mesh.edges.north[mesh.edges.north.length - 1];
+      if (corner) {
+        expect(corner.input.wind).toEqual([]);
+        alreadyChecked.set(corner.axial, true);
+      }
       mesh.edges.east.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.edges.north.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.meshItems.forEach(m => {
         if (!alreadyChecked.has(m.axial)) {
@@ -286,7 +314,7 @@ describe("WindGenerator", () => {
         }
       });
     });
-    it("applies 240 degree wind to east + south cells only", () => {
+    it("applies 240 degree wind to east + south cells only - but not SE corner", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 240, strength: 10 };
@@ -294,13 +322,22 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      const corner = mesh.edges.south[mesh.edges.south.length - 1];
+      if (corner) {
+        expect(corner.input.wind).toEqual([]);
+        alreadyChecked.set(corner.axial, true);
+      }
       mesh.edges.east.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.edges.south.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.meshItems.forEach(m => {
         if (!alreadyChecked.has(m.axial)) {
@@ -308,7 +345,7 @@ describe("WindGenerator", () => {
         }
       });
     });
-    it("applies 300 degree wind to west + south cells only", () => {
+    it("applies 300 degree wind to west + south cells only - but not SW corner", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 300, strength: 10 };
@@ -316,13 +353,22 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      const corner = mesh.edges.south[0];
+      if (corner) {
+        expect(corner.input.wind).toEqual([]);
+        alreadyChecked.set(corner.axial, true);
+      }
       mesh.edges.west.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.edges.south.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
-        alreadyChecked.set(m.axial, true);
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
+          alreadyChecked.set(m.axial, true);
+        }
       });
       mesh.meshItems.forEach(m => {
         if (!alreadyChecked.has(m.axial)) {
@@ -339,13 +385,19 @@ describe("WindGenerator", () => {
 
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      // TODO - what about NW corner?
+      // const corner = mesh.edges.north[0];
+      // if(corner){
+      //   expect(corner.input.wind).toEqual([]);
+      //   alreadyChecked.set(corner.axial, true);
+      // }
       mesh.edges.west.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 0, strength: 2.5 }, { degrees: 60, strength: 7.5 }]);
+        expect(m.input.wind).toEqual([{ degrees: 45, strength: 2.5 }, { degrees: 45, strength: 7.5 }]);
         alreadyChecked.set(m.axial, true);
       });
       mesh.edges.north.forEach(m => {
         if (!alreadyChecked.has(m.axial)) {
-          expect(m.input.wind).toEqual([{ degrees: 60, strength: 7.5 }]);
+          expect(m.input.wind).toEqual([{ degrees: 45, strength: 7.5 }]);
           alreadyChecked.set(m.axial, true);
         }
       });
@@ -359,22 +411,53 @@ describe("WindGenerator", () => {
 
 
   describe("calculateWindEffect", () => {
-    it("generates even initial wind", () => {
+    it("generates even initial wind for 0 degrees", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 0, strength: 10 };
 
       WindGenerator.calculateWindEffect(mesh, initialWind);
 
-      // need to ensure there is only one row/column that is "edge" or we'll feed in too much wind
-      console.log(mesh.edges.east.length);
-      console.log(mesh.edges.west.length);
-      console.log(mesh.edges.south.length);
-      console.log(mesh.edges.north.length);
+      mesh.meshItems.forEach(m => {
+        expect(m.output.wind).toEqual([{ degrees: 0, strength: 10 }]);
+      });
+    });
+
+    it("generates even initial wind for 60 degrees", () => {
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      mesh.apply(m => m.type = MeshType.Ocean);
+      const initialWind = { degrees: 60, strength: 10 };
+
+      WindGenerator.calculateWindEffect(mesh, initialWind);
 
       mesh.meshItems.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 0, strength: 10 }]);
+        // if (m.axial.r == 0 && m.axial.q == 0)
+        //   expect(m.output.wind).toEqual([]);
+        // else
+        expect(m.output.wind).toEqual([{ degrees: 60, strength: 10 }]);
+      });
+    });
+
+    it("generates even initial wind for 45 degrees", () => {
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      mesh.apply(m => m.type = MeshType.Ocean);
+      const initialWind = { degrees: 45, strength: 10 };
+
+      WindGenerator.calculateWindEffect(mesh, initialWind);
+
+      debugMesh(mesh);
+      mesh.meshItems.forEach(m => {
+        expect(m.output.wind).toEqual([{ degrees: 45, strength: 10 }]);
       });
     });
   });
 });
+
+function debugMesh(mesh: HexagonMesh) {
+  console.log({
+    mesh: mesh.meshItems.map(mi => JSON.stringify({
+      axial: mi.axial,
+      wind: mi.output.wind
+    }))
+  });
+}
