@@ -63,6 +63,16 @@ describe("WindGenerator", () => {
       expect(output).toEqual(undefined);
     });
 
+
+    it("returns empty set if 0 strength inputs", () => {
+      const meshItem = getSampleMeshItem();
+      meshItem.input.wind = [{ degrees: 60, strength: 0 }];
+
+      const output = calculateWindOutput(meshItem, 1);
+
+      expect(output).toEqual(undefined);
+    });
+
     it("maintains the wind strength when travelling on level terrain", () => {
       // 10mps wind travelling SW 1km
       //  wind speed loss is a magic number
@@ -242,14 +252,12 @@ describe("WindGenerator", () => {
 
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
-      const corner = mesh.edges.north[0];
-      if (corner) {
-        expect(corner.input.wind).toEqual([]);
-        alreadyChecked.set(corner.axial, true);
-      }
-      mesh.edges.west.forEach(m => {
+      mesh.edges.west.forEach((m, i) => {
         if (!alreadyChecked.has(m.axial)) {
-          expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+          if (i % 2 == 0)
+            expect(m.input.wind).toEqual([{ degrees: 60, strength: 10 }]);
+          else
+            expect(m.input.wind).toEqual([{ degrees: 60, strength: 0 }]);
         }
         alreadyChecked.set(m.axial, true);
       });
@@ -273,14 +281,12 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
-      const corner = mesh.edges.north[mesh.edges.north.length - 1];
-      if (corner) {
-        expect(corner.input.wind).toEqual([]);
-        alreadyChecked.set(corner.axial, true);
-      }
-      mesh.edges.east.forEach(m => {
+      mesh.edges.east.forEach((m, i) => {
         if (!alreadyChecked.has(m.axial)) {
-          expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
+          if (i % 2 == 0)
+            expect(m.input.wind).toEqual([{ degrees: 120, strength: 10 }]);
+          else
+            expect(m.input.wind).toEqual([{ degrees: 120, strength: 0 }]);
           alreadyChecked.set(m.axial, true);
         }
       });
@@ -322,14 +328,12 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
-      const corner = mesh.edges.south[mesh.edges.south.length - 1];
-      if (corner) {
-        expect(corner.input.wind).toEqual([]);
-        alreadyChecked.set(corner.axial, true);
-      }
-      mesh.edges.east.forEach(m => {
+      mesh.edges.east.forEach((m, i) => {
         if (!alreadyChecked.has(m.axial)) {
-          expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
+          if (i % 2 == 0)
+            expect(m.input.wind).toEqual([{ degrees: 240, strength: 10 }]);
+          else
+            expect(m.input.wind).toEqual([{ degrees: 240, strength: 0 }]);
           alreadyChecked.set(m.axial, true);
         }
       });
@@ -353,14 +357,12 @@ describe("WindGenerator", () => {
       applyInitialWind(mesh, initialWind);
 
       const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
-      const corner = mesh.edges.south[0];
-      if (corner) {
-        expect(corner.input.wind).toEqual([]);
-        alreadyChecked.set(corner.axial, true);
-      }
-      mesh.edges.west.forEach(m => {
+      mesh.edges.west.forEach((m, i) => {
         if (!alreadyChecked.has(m.axial)) {
-          expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
+          if (i % 2 == 0)
+            expect(m.input.wind).toEqual([{ degrees: 300, strength: 10 }]);
+          else
+            expect(m.input.wind).toEqual([{ degrees: 300, strength: 0 }]);
           alreadyChecked.set(m.axial, true);
         }
       });
@@ -391,8 +393,13 @@ describe("WindGenerator", () => {
       //   expect(corner.input.wind).toEqual([]);
       //   alreadyChecked.set(corner.axial, true);
       // }
-      mesh.edges.west.forEach(m => {
-        expect(m.input.wind).toEqual([{ degrees: 45, strength: 2.5 }, { degrees: 45, strength: 7.5 }]);
+      mesh.edges.west.forEach((m, i) => {
+        if (i % 2 == 0) {
+          expect(m.input.wind).toEqual([{ degrees: 45, strength: 2.5 }, { degrees: 45, strength: 7.5 }]);
+        }
+        else {
+          expect(m.input.wind).toEqual([{ degrees: 45, strength: 2.5 }, { degrees: 45, strength: 0 }]);
+        }
         alreadyChecked.set(m.axial, true);
       });
       mesh.edges.north.forEach(m => {
@@ -430,11 +437,14 @@ describe("WindGenerator", () => {
 
       WindGenerator.calculateWindEffect(mesh, initialWind);
 
+      //debugMesh(mesh);
       mesh.meshItems.forEach(m => {
-        // if (m.axial.r == 0 && m.axial.q == 0)
-        //   expect(m.output.wind).toEqual([]);
-        // else
-        expect(m.output.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        if (m.isMapEdge) {
+          // complicated - some edge tiles will be 0's to prevent doubling up
+        }
+        else {
+          expect(m.output.wind).toEqual([{ degrees: 60, strength: 10 }]);
+        }
       });
     });
 
@@ -445,7 +455,7 @@ describe("WindGenerator", () => {
 
       WindGenerator.calculateWindEffect(mesh, initialWind);
 
-      debugMesh(mesh);
+      // debugMesh(mesh);
       mesh.meshItems.forEach(m => {
         expect(m.output.wind).toEqual([{ degrees: 45, strength: 10 }]);
       });
@@ -460,4 +470,9 @@ function debugMesh(mesh: HexagonMesh) {
       wind: mi.output.wind
     }))
   });
+  console.log(mesh.axialItems.map((r, ri) => (ri % 2 == 1 ? "  " : "") + r.filter(c => c != null).map(c => `[${pad(c?.output.wind[0].strength, 3)}]`).join(" ")).join("\n"));
+}
+
+function pad(str, num) {
+  return `    ${("" + str).substr(0, num)}`.substr(-num, num);
 }

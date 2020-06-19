@@ -55,7 +55,7 @@ export class HybridScene extends Phaser.Scene {
     this.seed = SEED;
     this.hexWidth = HEXAGON_WIDTH;
     this.hexHeight = HEXAGON_HEIGHT;
-    this.initialWind = { degrees: 60, strength: INITIAL_WIND_SPEED_MPS };
+    this.initialWind = { degrees: 150, strength: INITIAL_WIND_SPEED_MPS };
     this.pxToKilometers = PX_TO_KM;
   }
 
@@ -232,7 +232,8 @@ export class HybridScene extends Phaser.Scene {
   drawHeightMap(depth: number, mesh: IMesh) {
     const polygons = [] as Phaser.GameObjects.Polygon[];
     mesh.apply(m => {
-      const color = m.isMapEdge ? { color: 0xff0000, alpha: 1 } : this.getHeightMapColor(m.height);
+      // const color = m.isMapEdge ? { color: 0xff0000, alpha: 1 } : this.getHeightMapColor(m.height);
+      const color = this.getHeightMapColor(m.height);
       const p = this.add.polygon(0, 0, m.points, color.color, color.alpha)
         .setOrigin(0, 0)
         .setDepth(depth);
@@ -294,8 +295,8 @@ export class HybridScene extends Phaser.Scene {
             { x: 0, y: 0 },
             { x: -3, y: 3 },
             { x: -3, y: 1 },
-            { x: -w.strength / 2, y: 1 },
-            { x: -w.strength / 2, y: -1 },
+            { x: -w.strength * 1.5, y: 1 },
+            { x: -w.strength * 1.5, y: -1 },
             { x: -3, y: -1 },
             { x: -3, y: -3 }
           ];
