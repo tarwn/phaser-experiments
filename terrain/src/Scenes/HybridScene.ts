@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
 import { MeshType, IMesh, IWindMeasure } from "../mesh/types";
-import { createVoronoi, getEmptyIO, Mesh } from "../mesh/Mesh";
+import { createVoronoi, Mesh, getEmptyInput, getEmptyOutput } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
@@ -129,8 +129,8 @@ export class HybridScene extends Phaser.Scene {
       if (m.height < 0) {
         m.type = MeshType.Ocean;
       }
-      m.input = getEmptyIO();
-      m.output = getEmptyIO();
+      m.input = getEmptyInput();
+      m.output = getEmptyOutput();
     });
   }
 
@@ -147,10 +147,11 @@ export class HybridScene extends Phaser.Scene {
     this.hexMesh.apply(m => {
       if (m.height === 0) {
         ctr++;
-        const nonZeroNeighbors = m.neighbors.filter(n => n.meshItem.height != 0);
+        const nonZeroNeighbors = m.rawNeighbors.filter(n => n.meshItem.height != 0);
         m.height = nonZeroNeighbors.reduce((ttl, n) => ttl + n.meshItem.height, 0) / nonZeroNeighbors.length;
       }
     });
+    console.log(this.hexMesh);
     console.log(`${ctr} hex tiles had to be post-averaged from neighbors`);
   }
 
@@ -185,7 +186,7 @@ export class HybridScene extends Phaser.Scene {
     const lines = [] as Phaser.GameObjects.Line[];
     mesh.apply(m => {
       // the filter is so we only draw connections once, not once from each side (double draw)
-      m.neighbors.filter(n => n.site.x > m.site.x || (m.site.x == n.site.x && n.site.y > m.site.y)).forEach(n => {
+      m.rawNeighbors.filter(n => n.site.x > m.site.x || (m.site.x == n.site.x && n.site.y > m.site.y)).forEach(n => {
         lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
           .setDepth(depth)
           .setOrigin(0, 0));
@@ -256,7 +257,7 @@ export class HybridScene extends Phaser.Scene {
     const coastline = [] as Phaser.GameObjects.Line[];
     this.hexMesh?.apply(m => {
       if (m.type === MeshType.Ocean) {
-        m.neighbors.forEach(n => {
+        m.rawNeighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
             const line = this.add.line(0, 0, n.edge.points[0].x, n.edge.points[0].y, n.edge.points[1].x, n.edge.points[1].y, 0x000000, 0.3)
               .setOrigin(0, 0)
@@ -324,26 +325,25 @@ export class HybridScene extends Phaser.Scene {
     // });
     const windmap = [] as Phaser.GameObjects.Polygon[];
     this.hexMesh?.apply(m => {
-      if (m.output.wind.length > 0 && m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
-        m.output.wind.forEach(w => {
-          if (w.strength > .1) {
-            const points = [
-              { x: 0, y: 0 },
-              { x: -3, y: 3 },
-              { x: -3, y: 1 },
-              { x: -w.strength * 1.5, y: 1 },
-              { x: -w.strength * 1.5, y: -1 },
-              { x: -3, y: -1 },
-              { x: -3, y: -3 }
-            ];
-            const color = this.getColorFromScale(w.strength);
-            const wind = this.add.polygon(m.site.x, m.site.y, points, color.color, color.alpha)
-              .setOrigin(0, 0)
-              .setDepth(depth)
-              .setRotation(Phaser.Math.DegToRad(w.degrees));
-            windmap.push(wind);
-          }
-        });
+      if (m.output.wind && m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
+        const w = m.output.wind;
+        if (w.strength > .1) {
+          const points = [
+            { x: 0, y: 0 },
+            { x: -3, y: 3 },
+            { x: -3, y: 1 },
+            { x: -w.strength * 1.5, y: 1 },
+            { x: -w.strength * 1.5, y: -1 },
+            { x: -3, y: -1 },
+            { x: -3, y: -3 }
+          ];
+          const color = this.getColorFromScale(w.strength);
+          const wind = this.add.polygon(m.site.x, m.site.y, points, color.color, color.alpha)
+            .setOrigin(0, 0)
+            .setDepth(depth)
+            .setRotation(Phaser.Math.DegToRad(w.degrees));
+          windmap.push(wind);
+        }
       }
     });
     // console.log(windmap);

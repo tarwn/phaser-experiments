@@ -1,15 +1,20 @@
-import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex } from "./types";
-import { getEmptyIO } from "./Mesh";
+// import * as Phaser from "phaser";
+import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IOutput, IInput } from "./types";
+import { getEmptyInput, getEmptyOutput } from "./Mesh";
 
 export interface IHexagonMeshItem extends IMeshItem {
   points: IVertex[];
-  neighbors: IHexagonMeshNeighbor[];
+  hasNeighbor: (degrees: number) => boolean;
+  getNeighbor: (degrees: number) => IHexagonMeshNeighbor | undefined;
+  setNeighbor: (neighbor: IHexagonMeshNeighbor, degrees: number) => void;
+  rawNeighbors: IHexagonMeshNeighbor[];
   // cube or axial coords also?
-  axial: { q: number, r: number };
+  axial: IAxialPoint;
 }
 
+
 interface IHexagonMeshNeighbor extends IMeshNeighbor {
-  meshItem: IHexagonMeshItem;
+  meshItem: HexagonMeshItem;
   edge: IHexagonEdge;
 }
 
@@ -20,32 +25,106 @@ interface IHexagonEdge {
   degrees: number;
 }
 
+export class HexagonMeshItem implements IHexagonMeshItem {
+  private _indexedNeighbors = new Map<number, IHexagonMeshNeighbor>();
+  points: IVertex[];
+  rawNeighbors: IHexagonMeshNeighbor[];
+  axial: IAxialPoint;
+  site: IPixelPoint;
+  isMapEdge: boolean;
+  height: number;
+  input: IInput;
+  output: IOutput;
+  type: MeshType;
+
+  constructor(axial: IAxialPoint, site: IPixelPoint, isMapEdge: boolean, height: number, type: MeshType, points: IVertex[]) {
+    this.axial = axial;
+    this.site = site;
+    this.isMapEdge = isMapEdge;
+    this.height = height;
+    this.type = type;
+    this.points = points;
+    this.input = getEmptyInput();
+    this.output = getEmptyOutput();
+    this.rawNeighbors = new Array<IHexagonMeshNeighbor>();
+  }
+
+  hasNeighbor(degrees: number): boolean {
+    return this._indexedNeighbors.has(degrees);
+  }
+  getNeighbor(degrees: number): IHexagonMeshNeighbor | undefined {
+    return this._indexedNeighbors.get(degrees);
+  }
+  setNeighbor(neighbor: IHexagonMeshNeighbor, degrees: number) {
+    this._indexedNeighbors.set(degrees, neighbor);
+    this.rawNeighbors.push(neighbor);
+  }
+  initNeighbor(neighbor: HexagonMeshItem | undefined, q: number, r: number, edgePoints: IVertex[], degrees: number) {
+    if (!neighbor) return;
+    this.setNeighbor({
+      site: neighbor.site,
+      meshItem: neighbor,
+      edge: { q, r, points: edgePoints, degrees }
+    }, degrees);
+  }
+
+}
+
 export class HexagonMesh implements IMesh {
   hexWidth: number;
   hexHeight: number;
-  meshItems!: IHexagonMeshItem[];
-  axialItems!: IHexagonMeshItem[][];
+  meshItems!: HexagonMeshItem[];
+  axialItems!: HexagonMeshItem[][];
   axialColumnCount!: number;
   axialRowCount!: number;
   edges: {
-    north: IHexagonMeshItem[],
-    east: IHexagonMeshItem[],
-    south: IHexagonMeshItem[],
-    west: IHexagonMeshItem[]
+    north: HexagonMeshItem[],
+    east: HexagonMeshItem[],
+    south: HexagonMeshItem[],
+    west: HexagonMeshItem[]
   };
   pxToKilometer: number;
+
+  private _d: {
+    halfHexWidth: number;
+    quarterHexHeight: number;
+    halfHexHeight: number;
+    threeQuarterHexHeight: number;
+  }
 
   constructor(hexWidth: number, hexHeight: number, width: number, height: number, pxToKilometer: number) {
     this.hexWidth = hexWidth;
     this.hexHeight = hexHeight;
     this.pxToKilometer = pxToKilometer;
     this.edges = {
-      north: [] as IHexagonMeshItem[],
-      east: [] as IHexagonMeshItem[],
-      south: [] as IHexagonMeshItem[],
-      west: [] as IHexagonMeshItem[]
+      north: [] as HexagonMeshItem[],
+      east: [] as HexagonMeshItem[],
+      south: [] as HexagonMeshItem[],
+      west: [] as HexagonMeshItem[]
+    };
+    this._d = {
+      halfHexWidth: hexWidth / 2,
+      quarterHexHeight: hexHeight / 4,
+      halfHexHeight: hexHeight / 2,
+      threeQuarterHexHeight: hexHeight / 4 + hexHeight / 2
     };
     this.createMeshItems(hexWidth, hexHeight, width, height);
+  }
+
+  qToX(q: number, r: number) {
+    return (q + Math.floor(r / 2)) * this.hexWidth + (r % 2 == 0 ? 0 : this._d.halfHexWidth);
+  }
+
+  xToQ(x: number, r: number) {
+    return ((x - (r % 2 == 0 ? 0 : this._d.halfHexWidth)) / this.hexWidth) - Math.floor(r / 2);
+  }
+
+  rToY(r: number) {
+    return this._d.quarterHexHeight + (r * this._d.threeQuarterHexHeight);
+  }
+
+  yToR(y: number) {
+    return (y - this._d.quarterHexHeight) / this._d.threeQuarterHexHeight;
   }
 
   private createMeshItems(hexWidth: number, hexHeight: number, width: number, height: number) {
@@ -67,17 +146,14 @@ export class HexagonMesh implements IMesh {
     //  Edges:
     //    row 0, row N and/or row N-1?
     //    col 0, col N
+    const { _d } = this;
 
-    const halfHexWidth = hexWidth / 2;
-    const quarterHexHeight = hexHeight / 4;
-    const halfHexHeight = hexHeight / 2;
-    const threeQuarterHexHeight = quarterHexHeight + halfHexHeight;
-    const evenRowWidth = Math.ceil((width + halfHexWidth) / hexWidth);
+    const evenRowWidth = Math.ceil((width + _d.halfHexWidth) / hexWidth);
     // const oddRowWidth = Math.ceil(width / hexWidth);
     const oddRowWidth = evenRowWidth;
-    const rowCount = 1 + Math.floor(height / threeQuarterHexHeight);
-    const bottomEdgeRow = ((-threeQuarterHexHeight + (rowCount * hexHeight)) - width) > threeQuarterHexHeight ? rowCount - 1 : rowCount;
-    const meshItems = [] as IHexagonMeshItem[];
+    const rowCount = 1 + Math.floor(height / _d.threeQuarterHexHeight);
+    const bottomEdgeRow = ((-_d.threeQuarterHexHeight + (rowCount * hexHeight)) - width) > _d.threeQuarterHexHeight ? rowCount - 1 : rowCount;
+    const meshItems = new Array<HexagonMeshItem>();
 
     // for axial, row r matches y, but the further down the chart the earlier q/column we're starting
     //  row 0, tile 0: r = 0, q = 0
@@ -94,56 +170,51 @@ export class HexagonMesh implements IMesh {
       .fill(undefined)
       .map(() => new Array(columnCount).fill(undefined));
 
-    for (let y = 0; y < rowCount; y++) {
-      for (let x = 0; x < evenRowWidth; x++) {
-        const isEvenRow = (y % 2 === 0);
+    for (let r = 0; r < rowCount; r++) {
+      for (let qish = 0; qish < evenRowWidth; qish++) {
+        // qish is not q, it's 0 indexed which is useful, but true q will be calculated below
+
+        const isEvenRow = (r % 2 === 0);
         // skip the last tile on odd rows if it isn't needed
-        if (isEvenRow && x === evenRowWidth) continue;
+        if (isEvenRow && qish === evenRowWidth) continue;
         const rowWidth = isEvenRow ? evenRowWidth : oddRowWidth;
 
-        const site = {
-          x: (x * hexWidth) + (isEvenRow ? 0 : halfHexWidth),
-          y: quarterHexHeight + (y * threeQuarterHexHeight)
-        };
         const axial = {
-          q: -Math.floor(y / 2) + x,
-          r: y
+          q: -Math.floor(r / 2) + qish,
+          r
         };
+        const site = {
+          x: this.qToX(axial.q, axial.r),
+          y: this.rToY(axial.r)
+        };
+
+
         // points, clockwise from top
         const points = [
-          { x: site.x, y: site.y - halfHexHeight },
-          { x: site.x + halfHexWidth, y: site.y - quarterHexHeight },
-          { x: site.x + halfHexWidth, y: site.y + quarterHexHeight },
-          { x: site.x, y: site.y + halfHexHeight },
-          { x: site.x - halfHexWidth, y: site.y + quarterHexHeight },
-          { x: site.x - halfHexWidth, y: site.y - quarterHexHeight }
+          { x: site.x, y: site.y - _d.halfHexHeight },
+          { x: site.x + _d.halfHexWidth, y: site.y - _d.quarterHexHeight },
+          { x: site.x + _d.halfHexWidth, y: site.y + _d.quarterHexHeight },
+          { x: site.x, y: site.y + _d.halfHexHeight },
+          { x: site.x - _d.halfHexWidth, y: site.y + _d.quarterHexHeight },
+          { x: site.x - _d.halfHexWidth, y: site.y - _d.quarterHexHeight }
         ];
-        const newItem = {
-          site,
-          axial,
-          isMapEdge: (x === 0 || x === rowWidth - 1 || y === 0 || y === bottomEdgeRow),
-          height: 0,
-          input: getEmptyIO(),
-          output: getEmptyIO(),
-          type: MeshType.Land,
-          // hex-specific, coming soon
-          points,
-          neighbors: [],
-        };
+        const isMapEdge = (qish === 0 || qish === rowWidth - 1 || r === 0 || r === bottomEdgeRow);
+        const newItem = new HexagonMeshItem(axial, site, isMapEdge, 0, MeshType.Land, points);
+
         meshItems.push(newItem);
         this.axialSet(newItem.axial.q, newItem.axial.r, newItem);
 
         // add to edges list
-        if (x === 0) {
+        if (qish === 0) {
           this.edges.west.push(newItem);
         }
-        if (x === rowWidth - 1) {
+        if (qish === rowWidth - 1) {
           this.edges.east.push(newItem);
         }
-        if (y === 0) {
+        if (r === 0) {
           this.edges.north.push(newItem);
         }
-        if (y === bottomEdgeRow) {
+        if (r === bottomEdgeRow) {
           this.edges.south.push(newItem);
         }
       }
@@ -152,19 +223,12 @@ export class HexagonMesh implements IMesh {
 
     // calculate neighbors
     this.apply(m => {
-      const neighbors = [
-        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r - 1), edge: { q: 1, r: -1, points: [m.points[0], m.points[1]], degrees: 300 } },
-        { neighbor: this.axialGet(m.axial.q + 1, m.axial.r + 0), edge: { q: 1, r: 0, points: [m.points[1], m.points[2]], degrees: 0 } },
-        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r + 1), edge: { q: 0, r: 1, points: [m.points[2], m.points[3]], degrees: 60 } },
-        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 1), edge: { q: -1, r: 1, points: [m.points[3], m.points[4]], degrees: 120 } },
-        { neighbor: this.axialGet(m.axial.q - 1, m.axial.r + 0), edge: { q: -1, r: 0, points: [m.points[4], m.points[5]], degrees: 180 } },
-        { neighbor: this.axialGet(m.axial.q + 0, m.axial.r - 1), edge: { q: 0, r: -1, points: [m.points[5], m.points[0]], degrees: 240 } },
-      ].filter(n => n.neighbor !== undefined) as { neighbor: IHexagonMeshItem, edge: IHexagonEdge }[];
-      m.neighbors = neighbors.map(n => ({
-        site: n.neighbor.site,
-        meshItem: n.neighbor,
-        edge: n.edge
-      }));
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r - 1), 1, -1, [m.points[0], m.points[1]], 300);
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r + 0), 1, 0, [m.points[1], m.points[2]], 0);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r + 1), 0, 1, [m.points[2], m.points[3]], 60);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 1), -1, 1, [m.points[3], m.points[4]], 120);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 0), -1, 0, [m.points[4], m.points[5]], 180);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r - 1), 0, -1, [m.points[5], m.points[0]], 240);
     });
 
     // make sure edges are populated correctly
@@ -185,13 +249,13 @@ export class HexagonMesh implements IMesh {
     // })));
   }
 
-  axialSet(q: number, r: number, item: IHexagonMeshItem) {
+  axialSet(q: number, r: number, item: HexagonMeshItem) {
     const mCol = q + Math.floor(this.axialRowCount / 2);
     const mRow = r;
     this.axialItems[mRow][mCol] = item;
   }
 
-  axialGet(q: number, r: number): IHexagonMeshItem | undefined {
+  axialGet(q: number, r: number): HexagonMeshItem | undefined {
     if (r < 0 || r >= this.axialRowCount)
       return undefined;
 
@@ -201,16 +265,22 @@ export class HexagonMesh implements IMesh {
     return this.axialItems[mRow][mCol];
   }
 
-  apply(method: (m: IHexagonMeshItem) => void): void {
+  apply(method: (m: HexagonMeshItem) => void): void {
     this.meshItems.forEach(m => method(m));
   }
 
-  findClosest(x: number, y: number): IHexagonMeshItem | undefined {
-    // TODO: replace this with a direct lookup or something better to find item directly
-    return this.meshItems.find(m => {
-      // this is close, it's using circular radius instead of actual collision so iff on the edges
-      return Math.abs(Phaser.Math.Distance.Between(x, y, m.site.x, m.site.y)) < this.hexHeight / 2;
-    });
+  // findClosest(x: number, y: number): HexagonMeshItem | undefined {
+  //   // TODO: replace this with a direct lookup or something better to find item directly
+  //   return this.meshItems.find(m => {
+  //     // this is close, it's using circular radius instead of actual collision so iff on the edges
+  //     return Math.abs(Phaser.Math.Distance.Between(x, y, m.site.x, m.site.y)) < this.hexHeight / 2;
+  //   });
+  // }
+
+  findClosest(x: number, y: number): HexagonMeshItem | undefined {
+    const r = Math.round(this.yToR(y));
+    const q = Math.round(this.xToQ(x, r));
+    return this.axialGet(q, r);
   }
 
   reduce<T>(method: (prev: T, cur: IMeshItem) => T, initial: T): T {

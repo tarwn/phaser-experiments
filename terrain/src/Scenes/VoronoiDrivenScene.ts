@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
 import { Direction, MeshType } from "../mesh/types";
-import { createVoronoi, getEmptyIO, Mesh } from "../mesh/Mesh";
+import { createVoronoi, Mesh, getEmptyInput, getEmptyOutput } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
@@ -101,8 +101,8 @@ export class VoronoiDrivenScene extends Phaser.Scene {
       if (m.height < 0) {
         m.type = MeshType.Ocean;
       }
-      m.input = getEmptyIO();
-      m.output = getEmptyIO();
+      m.input = getEmptyInput();
+      m.output = getEmptyOutput();
     });
   }
 
@@ -132,7 +132,7 @@ export class VoronoiDrivenScene extends Phaser.Scene {
     const lines = [] as Phaser.GameObjects.Line[];
     this.mesh.apply(m => {
       // the filter is so we only draw connections once, not once from each side (double draw)
-      m.neighbors.filter(n => n.dir === Direction.Left).forEach(n => {
+      m.rawNeighbors.filter(n => n.dir === Direction.Left).forEach(n => {
         lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
           .setDepth(depth)
           .setOrigin(0, 0));
@@ -192,7 +192,7 @@ export class VoronoiDrivenScene extends Phaser.Scene {
     const edges = [] as Voronoi.Halfedge[];
     this.mesh.apply(m => {
       if (m.type === MeshType.Ocean) {
-        m.neighbors.forEach(n => {
+        m.rawNeighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
             edges.push(n.halfEdge);
           }

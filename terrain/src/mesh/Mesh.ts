@@ -1,5 +1,5 @@
 import Voronoi from "voronoi";
-import { IMeshItem, Direction, MeshType, IO, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh } from "./types";
+import { IMeshItem, Direction, MeshType, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh, DirectionalIO, IWindMeasure, IOutput, IInput } from "./types";
 
 export const createVoronoi = (siteCount: number, width: number, height: number, rng: seedrandom.prng): Voronoi.VoronoiDiagram => {
   const voronoi = new Voronoi();
@@ -11,12 +11,19 @@ export const createVoronoi = (siteCount: number, width: number, height: number, 
   return voronoi.compute(sites, boundingbox);
 };
 
-export const getEmptyIO = (): IO => {
+export const getEmptyInput = (): IInput => {
   return {
     water: 0,
     dirt: 0,
-    wind: []
-  } as IO;
+    wind: new DirectionalIO<IWindMeasure>()
+  } as IInput;
+};
+export const getEmptyOutput = (): IOutput => {
+  return {
+    water: 0,
+    dirt: 0,
+    wind: undefined
+  } as IOutput;
 };
 
 const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem | null, halfEdge: Voronoi.Halfedge): IVoronoiMeshNeighbor => ({
@@ -28,18 +35,18 @@ const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem 
 
 const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
   const mesh = voronoi.cells.map(c => {
-    const neighbors = c.halfedges.map(h => h.edge.lSite == c.site
+    const rawNeighbors = c.halfedges.map(h => h.edge.lSite == c.site
       ? createNeighbor(h.edge.rSite, Direction.Right, null, h)
       : createNeighbor(h.edge.lSite, Direction.Left, null, h)
     ).filter(n => n !== null && n.site !== null);
     const newItem = {
       ...c,
       points: c.halfedges.map(h => h.getStartpoint()),
-      neighbors,
+      rawNeighbors,
       isMapEdge: false,
       height: 0,
-      input: getEmptyIO(),
-      output: getEmptyIO(),
+      input: getEmptyInput(),
+      output: getEmptyOutput(),
       type: MeshType.Land
     };
     return newItem;
@@ -80,7 +87,7 @@ export class Mesh implements IMesh {
     this.apply(m => {
       const edgePoints = m.points.find(m => m.x <= 0 || m.y <= 0 || m.x >= this.width || m.y >= this.height);
       m.isMapEdge = edgePoints != null;
-      m.neighbors = m.neighbors.map(n => {
+      m.rawNeighbors = m.rawNeighbors.map(n => {
         return {
           ...n,
           meshItem: this.hash.get(`${n.site.x},${n.site.y}`) as IMeshItem

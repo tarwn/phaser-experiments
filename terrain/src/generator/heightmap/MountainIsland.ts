@@ -27,7 +27,7 @@ export const MountainIslandGenerator = {
 
     for (let i = 0; i < queue.length; i++) {
       const height = queue[i].height * (1 - rng() * peakFalloffRate);
-      queue[i].neighbors.forEach((n, i) => {
+      queue[i].rawNeighbors.forEach((n, i) => {
         if (n != null && n.meshItem != null) {
           if (n.meshItem.input.water === 0) {
             queue.push(n.meshItem);

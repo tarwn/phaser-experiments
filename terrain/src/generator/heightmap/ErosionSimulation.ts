@@ -19,7 +19,7 @@ export const ErosionSimulation = {
     //return 0;
     // erosion loop
     mesh.apply(m => {
-      const lowest = m.neighbors.reduce((prev, n) => {
+      const lowest = m.rawNeighbors.reduce((prev, n) => {
         if (prev === null || prev.meshItem === null) {
           return n;
         }

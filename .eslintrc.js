@@ -28,7 +28,8 @@ module.exports = {
     "editorconfig/editorconfig": "error",
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/interface-name-prefix": ["error", { "prefixWithI": "always" }]
+    "@typescript-eslint/interface-name-prefix": ["error", { "prefixWithI": "always" }],
+    "@typescript-eslint/no-non-null-assertion": "off"
   },
   "env": {
     "jest": true

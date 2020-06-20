@@ -4,7 +4,7 @@ import { MeshType } from "../mesh/types";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 import { HexagonMesh } from "../mesh/HexagonMesh";
-import { getEmptyIO } from "../mesh/Mesh";
+import { getEmptyInput, getEmptyOutput } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 
@@ -117,8 +117,8 @@ export class HexagonDrivenScene extends Phaser.Scene {
       if (m.height < 0) {
         m.type = MeshType.Ocean;
       }
-      m.input = getEmptyIO();
-      m.output = getEmptyIO();
+      m.input = getEmptyInput();
+      m.output = getEmptyOutput();
     });
   }
 
@@ -184,7 +184,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
     const coastline = [] as Phaser.GameObjects.Line[];
     this.mesh.apply(m => {
       if (m.type === MeshType.Ocean) {
-        m.neighbors.forEach(n => {
+        m.rawNeighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
             const line = this.add.line(0, 0, n.edge.points[0].x, n.edge.points[0].y, n.edge.points[1].x, n.edge.points[1].y, 0x000000, 0.3)
               .setOrigin(0, 0)
@@ -205,7 +205,7 @@ export class HexagonDrivenScene extends Phaser.Scene {
         this.add.polygon(0, 0, m.points, 0x0ff000, 1)
           .setOrigin(0, 0)
           .setDepth(depth + 1);
-        m.neighbors.forEach(n => {
+        m.rawNeighbors.forEach(n => {
           if (n.meshItem?.type === MeshType.Land) {
             this.add.polygon(0, 0, n.meshItem.points, 0xff0000, .1)
               .setOrigin(0, 0)
