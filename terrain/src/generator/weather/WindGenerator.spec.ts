@@ -18,6 +18,14 @@ const getSampleMeshItem = (overrides?: any): IHexagonMeshItem => {
   } as IHexagonMeshItem;
 };
 
+const getSampleNeighbor = (x: number, y: number, height: number, edgeDegrees: number) => {
+  return {
+    site: { x, y },
+    meshItem: getSampleMeshItem({ height, site: { x, y } }),
+    edge: { degrees: edgeDegrees, q: 0, r: 0, points: [] },
+  };
+};
+
 const roundDirs = (dirs: { [key: string]: number }): { [key: string]: number } => {
   const res = { ...dirs };
   Object.keys(res).forEach(k => {
@@ -38,6 +46,10 @@ const getEmptyDirectionsWith = (overrides?: any): { [key: string]: number } => {
   };
   return roundDirs(res);
 };
+
+function pad(str: string | number, num: number) {
+  return `    ${("" + str).substr(0, num)}`.substr(-num, num);
+}
 
 describe("WindGenerator", () => {
   describe("calculateWindOutput", () => {
@@ -62,7 +74,6 @@ describe("WindGenerator", () => {
 
       expect(output).toEqual(undefined);
     });
-
 
     it("returns empty set if 0 strength inputs", () => {
       const meshItem = getSampleMeshItem();
@@ -119,7 +130,6 @@ describe("WindGenerator", () => {
       // console.log(output.strength);
     });
 
-
     it("reduces the wind strength when travelling uphill", () => {
       // 10mps wind travelling SW 1km and uphill 1km
       //  wind speed loss is a magic number
@@ -166,6 +176,78 @@ describe("WindGenerator", () => {
       // console.log(output.strength);
     });
 
+    it("turns slightly when travelling uphill and neighboring terrain is lower slope", () => {
+      // 10mps wind travelling East 1km and uphill 1km
+      //  neighboring slopes match, so it could shift SE or NE
+      const pxPerKilometer = 1;
+      const meshItem = getSampleMeshItem({ height: 1000, site: { x: 1, y: 0 } });
+      meshItem.input.wind = [{ degrees: 0, strength: 10 }];
+      // originating W edge is downhill at 0m
+      meshItem.neighbors.push(getSampleNeighbor(0, 0, 0, 180));
+      // NE edge is 800m
+      meshItem.neighbors.push(getSampleNeighbor(0.5, 1, 800, 300));
+      // SE edge is 900m (to force it to pick a testable direction, NE)
+      meshItem.neighbors.push(getSampleNeighbor(0.5, -1, 900, 60));
+
+      const output = calculateWindOutput(meshItem, pxPerKilometer);
+
+      expect(output?.degrees).toBeGreaterThan(300);
+      expect(output?.degrees).toBeLessThan(360);
+      expect(output?.strength).toBeLessThan(10);
+      // console.log(output.strength);
+    });
+
+    it("averages the direction of winds together with some loss in strength", () => {
+      // 10mps wind travelling SW
+      // 10mps wind travelling S
+      const pxPerKilometer = 1;
+      const meshItem = getSampleMeshItem();
+      meshItem.input.wind = [
+        { degrees: 45, strength: 10 },
+        { degrees: 90, strength: 10 }
+      ];
+
+      const output = calculateWindOutput(meshItem, pxPerKilometer);
+
+      const expectedDirection = (90 + 45) / 2;
+      expect(output?.degrees).toBe(expectedDirection);
+      expect(output?.strength).toBeGreaterThan(18); // max 20%
+      expect(output?.strength).toBeLessThan(20);
+    });
+
+    it("averages opposite but even wind onto a perpendicular with loss in strength", () => {
+      // 10mps wind travelling W
+      // 10mps wind travelling E
+      const pxPerKilometer = 1;
+      const meshItem = getSampleMeshItem();
+      meshItem.input.wind = [
+        { degrees: 0, strength: 10 },
+        { degrees: 180, strength: 10 }
+      ];
+
+      const output = calculateWindOutput(meshItem, pxPerKilometer);
+
+      expect(output?.degrees).toBe(90);
+      expect(output?.strength).toBeGreaterThanOrEqual(18); // max 20%
+      expect(output?.strength).toBeLessThan(20);
+    });
+
+    it("combines uneven winds in new direction based on relative strengths, with some loss in overall strength", () => {
+      // 5mps wind travelling S
+      // 10mps wind travelling E
+      const pxPerKilometer = 1;
+      const meshItem = getSampleMeshItem();
+      meshItem.input.wind = [
+        { degrees: 90, strength: 5 },
+        { degrees: 0, strength: 10 }
+      ];
+
+      const output = calculateWindOutput(meshItem, pxPerKilometer);
+
+      expect(output?.degrees).toBe(90 * 1 / 3 + 0 * 2 / 3);
+      expect(output?.strength).toBeGreaterThan(15 * .8);  // max 20%
+      expect(output?.strength).toBeLessThan(15);
+    });
   });
 
   describe("calculateNeighborStrengths", () => {
@@ -222,6 +304,7 @@ describe("WindGenerator", () => {
 
       expect(roundDirs(output)).toStrictEqual(getEmptyDirectionsWith(expected));
     });
+
   });
 
   describe("applyInitialWind", () => {
@@ -471,8 +554,4 @@ function debugMesh(mesh: HexagonMesh) {
     }))
   });
   console.log(mesh.axialItems.map((r, ri) => (ri % 2 == 1 ? "  " : "") + r.filter(c => c != null).map(c => `[${pad(c?.output.wind[0].strength, 3)}]`).join(" ")).join("\n"));
-}
-
-function pad(str, num) {
-  return `    ${("" + str).substr(0, num)}`.substr(-num, num);
 }

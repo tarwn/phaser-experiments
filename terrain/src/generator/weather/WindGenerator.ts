@@ -7,6 +7,7 @@
 import * as Phaser from "phaser";
 import { IWindMeasure, MeshType } from "../../mesh/types";
 import { HexagonMesh, IHexagonMeshItem } from "../../mesh/HexagonMesh";
+import { getNextHighestEvenEdge, getNextLowestEvenEdge } from "../hexUtils";
 
 export enum Compass {
   North,
@@ -23,15 +24,17 @@ interface IWindLocation {
   heightkm: number;
 }
 
-export const calculateSlopeImpactOnWind = (source: IWindLocation, target: IWindLocation, strength: number): number => {
+export const calculateSlopeImpactOnWind = (source: IWindLocation, target: IWindLocation): number => {
   const run = Phaser.Math.Distance.Between(source.xkm, source.ykm, target.xkm, target.ykm);
   const rise = target.heightkm - source.heightkm;
   const slope = rise / run;
-  //call it 10% reduction per .5 slope
-  const reduction = .1 * (slope / .5);
-  return strength - reduction * strength;
+  //call it 10% reduction per 25% slope
+  return .1 * (slope / .25);
 };
 
+export const getUsableHeight = (meshItem: IHexagonMeshItem) => {
+  return meshItem.type === MeshType.Ocean ? 0 : meshItem.height;
+};
 
 // wind output of a particular mesh item
 export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: number): IWindMeasure | undefined => {
@@ -39,7 +42,7 @@ export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: n
     return undefined;
   }
 
-  // change strength
+  // 1a. Slopes change strength
   //  up slope slows down
   //  down slope speeds up - but not really in the real world, eddies, etc but good enough
   const strengths = meshItem.input.wind.map(w => {
@@ -48,17 +51,36 @@ export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: n
       const source = {
         xkm: neighbor.meshItem.site.x * pxToKilometer,
         ykm: neighbor.meshItem.site.y * pxToKilometer,
-        heightkm: neighbor.meshItem.type === MeshType.Ocean ? 0 : neighbor.meshItem.height / 1000
+        heightkm: getUsableHeight(neighbor.meshItem) / 1000
       };
       const target = {
         xkm: meshItem.site.x * pxToKilometer,
         ykm: meshItem.site.y * pxToKilometer,
-        heightkm: meshItem.type === MeshType.Ocean ? 0 : meshItem.height / 1000
+        heightkm: getUsableHeight(meshItem) / 1000
       };
 
+      const slopeImpact = calculateSlopeImpactOnWind(source, target);
+
+      // can we turn some towards another tile? up to 30 degrees
+      let endDegrees = w.degrees;
+      if (slopeImpact > .05) {
+        // console.log({ slopeImpact });
+        // const dirImpact = 100 * slopeImpact;
+        const leftTargetDegrees = getNextLowestEvenEdge(w.degrees);
+        const leftTarget = meshItem.neighbors.find(n => n.edge.degrees === leftTargetDegrees);
+        const rightTargetDegrees = getNextHighestEvenEdge(w.degrees);
+        const rightTarget = meshItem.neighbors.find(n => n.edge.degrees === rightTargetDegrees);
+        if (leftTarget && (!rightTarget || getUsableHeight(leftTarget.meshItem) < getUsableHeight(rightTarget.meshItem)) && getUsableHeight(leftTarget.meshItem) < getUsableHeight(meshItem)) {
+          endDegrees = (360 + w.degrees - 30) % 360;
+        }
+        else if (rightTarget && getUsableHeight(rightTarget.meshItem) < getUsableHeight(meshItem)) {
+          endDegrees = (w.degrees + 30) % 360;
+        }
+      }
+
       return {
-        degrees: w.degrees,
-        strength: calculateSlopeImpactOnWind(source, target, w.strength)
+        degrees: endDegrees,
+        strength: w.strength - slopeImpact * w.strength
       };
     }
     else {
@@ -66,32 +88,66 @@ export const calculateWindOutput = (meshItem: IHexagonMeshItem, pxToKilometer: n
     }
   });
 
-  // change strength
-  //  more friction and obstructions reduces wind velocity
+  // 1b. Slope could change direction?
 
-  // TODO combine the inputs to produce an output
-  //  this would be easier with vectors
+  // 2. Ground obstructions change strength
+  //  TODO: more friction and obstructions reduces wind velocity
+
+  // 3. Combining streams headed in different directions change direction + strength
+  //  Make up a loss range based on difference between inputs, maybe 20% max?
   const totalStrength = strengths.reduce((ttl, w) => ttl + w.strength, 0);
-  const totalDegrees = strengths.reduce((ttl, w) => ttl + w.degrees * w.strength, 0);
-  const output = {
-    degrees: totalDegrees / totalStrength,
-    strength: totalStrength
-  };
-  // if (totalStrength > 10) {
-  //   console.log({
-  //     axial: meshItem.axial,
-  //     inputs: JSON.stringify(meshItem.input.wind),
-  //     neighbors: meshItem.neighbors.map(n => JSON.stringify({
-  //       edge: n.edge.degrees,
-  //       wind: n.meshItem.output.wind
-  //     }))
-  //   });
-  // }
   if (totalStrength == 0) {
     return undefined;
   }
+  const totalDegrees = strengths.reduce((ttl, w) => ttl + w.degrees * w.strength, 0);
+  const finalDegrees = totalDegrees / totalStrength;
+  const finalStrength = strengths.reduce((ttl, w) => ttl + (1 + (Math.abs(w.degrees - finalDegrees) / 180 * -0.2)) * w.strength, 0);
+  const output = {
+    degrees: finalDegrees,
+    strength: finalStrength
+  };
 
   return output;
+};
+
+export const spreadWind = (source: IHexagonMeshItem, leftNeighborDegrees: number, rightNeighborDegrees: number) => {
+  const leftNeighbor = source.neighbors.find(n => n.edge.degrees === leftNeighborDegrees);
+  const rightNeighbor = source.neighbors.find(n => n.edge.degrees === rightNeighborDegrees);
+  if (!leftNeighbor && !rightNeighbor) {
+    return;
+  }
+
+  const roughInputs = source.input.wind.reduce((ttl, w) => ttl + w.strength, 0);
+  let leftNeighborSize = roughInputs;
+  if (leftNeighbor) {
+    leftNeighborSize = leftNeighbor.meshItem.input.wind.reduce((ttl, w) => ttl + w.strength, 0);
+  }
+  let rightNeighborSize = roughInputs;
+  if (rightNeighbor) {
+    rightNeighborSize = rightNeighbor.meshItem.input.wind.reduce((ttl, w) => ttl + w.strength, 0);
+  }
+
+  if (leftNeighbor && leftNeighborSize < rightNeighborSize && leftNeighborSize < roughInputs * 8) {
+    const percentage = (roughInputs - leftNeighborSize) / roughInputs;
+    source.input.wind.forEach(w => {
+      // give 25% of difference to neighbor + pretend 10% went higher
+      const share = { strength: w.strength * (.25 * percentage), degrees: w.degrees };
+      w.strength -= w.strength * (.35 * percentage);
+      leftNeighbor.meshItem.input.wind.push(share);
+    });
+    return leftNeighbor;
+  }
+  else if (rightNeighbor && rightNeighborSize < roughInputs * 8) {
+    const percentage = (roughInputs - rightNeighborSize) / roughInputs;
+    source.input.wind.forEach(w => {
+      // give 25% of difference to neighbor + pretend 10% went higher
+      const share = { strength: w.strength * (.25 * percentage), degrees: w.degrees };
+      w.strength -= w.strength * (.35 * percentage);
+      rightNeighbor.meshItem.input.wind.push(share);
+    });
+    return rightNeighbor;
+  }
+  return;
 };
 
 // wind output on neighbors
@@ -106,7 +162,7 @@ export const calculateNeighborStrengths = (wind: IWindMeasure) => {
     240: 0,
     300: 0
   } as { [key: number]: number };
-  // for each neighbor, calculate percentage of share based on amont of shared side
+  // for each neighbor, calculate percentage of share based on amount of shared side
   sides.forEach(side => {
     if (wind.degrees === side) {
       sideStrengths[side] = wind.strength;
@@ -254,7 +310,7 @@ export const WindGenerator = {
             if (neighborShares[n.edge.degrees]) {
               // attempt to skip over edges that wil get doubled up inputs
               if (!n.meshItem.isMapEdge || !n.meshItem.input.wind.find(w => w.degrees == output.degrees && w.strength == output.strength)) {
-                n.meshItem.input.wind.push({ degrees: output.degrees, strength: neighborShares[n.edge.degrees], source: queue[i].axial });
+                n.meshItem.input.wind.push({ degrees: output.degrees, strength: neighborShares[n.edge.degrees], source: queue[i].axial } as any);
               }
               if (!isIncluded.has(n.meshItem.axial)) {
                 isIncluded.set(n.meshItem.axial, true);
@@ -262,6 +318,21 @@ export const WindGenerator = {
               }
             }
           });
+        }
+      }
+
+      // adjust inputs if neighboring cells are much weaker?
+      for (let i = 0; i < queue.length; i++) {
+        if (queue[i].input.wind.length > 0) {
+          const leftNeighborDegrees = getNextLowestEvenEdge(queue[i].input.wind[0].degrees);
+          const rightNeighborDegrees = getNextHighestEvenEdge(queue[i].input.wind[0].degrees);
+          const n = spreadWind(queue[i], leftNeighborDegrees, rightNeighborDegrees);
+          if (n && !isIncluded.has(n.meshItem.axial)) {
+            isIncluded.set(n.meshItem.axial, true);
+            queue.push(n.meshItem);
+          }
+          //
+          // spreadWind(queue[i], rightNeighborDegrees, roughInputs);
         }
       }
 
