@@ -276,7 +276,7 @@ export class HybridScene extends Phaser.Scene {
     if (this.graphics.windmap) {
       this.graphics.windmap.clear(true, true);
     }
-    this.graphics.windmap = this.add.group(this.drawWindMap(depth));
+    this.graphics.windmap = this.drawWindMap(depth);
   }
   getColorFromScale(strength: number) {
     switch (true) {
@@ -323,27 +323,37 @@ export class HybridScene extends Phaser.Scene {
     //     });
     //   }
     // });
-    const windmap = [] as Phaser.GameObjects.Polygon[];
+    const windmap = this.add.group();
     this.hexMesh?.apply(m => {
-      if (m.output.wind && m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
-        const w = m.output.wind;
-        if (w.strength > .1) {
-          const points = [
-            { x: 0, y: 0 },
-            { x: -3, y: 3 },
-            { x: -3, y: 1 },
-            { x: -w.strength * 1.5, y: 1 },
-            { x: -w.strength * 1.5, y: -1 },
-            { x: -3, y: -1 },
-            { x: -3, y: -3 }
-          ];
-          const color = this.getColorFromScale(w.strength);
-          const wind = this.add.polygon(m.site.x, m.site.y, points, color.color, color.alpha)
-            .setOrigin(0, 0)
-            .setDepth(depth)
-            .setRotation(Phaser.Math.DegToRad(w.degrees));
-          windmap.push(wind);
-        }
+      const drawArrow = (m.output.wind && m.axial.q % 3 == 0 && m.axial.r % 3 == 0);
+      if (drawArrow) {
+        m.output.wind.forEach((w, i) => {
+          if (w.strength > .1) {
+            const points = [
+              { x: 0, y: 0 },
+              { x: -3, y: 3 },
+              { x: -3, y: 1 },
+              { x: -w.strength * 1.5, y: 1 },
+              { x: -w.strength * 1.5, y: -1 },
+              { x: -3, y: -1 },
+              { x: -3, y: -3 }
+            ];
+            const color = this.getColorFromScale(w.strength);
+            const wind = this.add.polygon(m.site.x + i * 3, m.site.y + i * 3, points, color.color, color.alpha + .5)
+              .setOrigin(0, 0)
+              .setDepth(depth)
+              .setRotation(Phaser.Math.DegToRad(w.degrees));
+            windmap.add(wind);
+
+            // const text = this.add.text(m.site.x, m.site.y, Math.round(w.strength).toString())
+            //   .setOrigin(0, 0)
+            //   .setDepth(depth + 1)
+            //   .setFontSize(8)
+            //   .setAlpha(color.alpha + .2)
+            //   .setStroke(color.color.toString(), 1);
+            // windmap.add(text);
+          }
+        });
       }
     });
     // console.log(windmap);

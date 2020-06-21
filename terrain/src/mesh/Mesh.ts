@@ -22,7 +22,7 @@ export const getEmptyOutput = (): IOutput => {
   return {
     water: 0,
     dirt: 0,
-    wind: undefined
+    wind: []
   } as IOutput;
 };
 

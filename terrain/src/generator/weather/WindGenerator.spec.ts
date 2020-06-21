@@ -53,7 +53,7 @@ export function debugMesh(mesh: HexagonMesh) {
 }
 
 export function debugMeshOutput(mesh: HexagonMesh) {
-  console.log(mesh.axialItems.map((r, ri) => (ri % 2 == 1 ? "  " : "") + r.filter(c => c != null).map(c => `[${pad(c?.output.wind?.strength ?? "", 3)}]`).join(" ")).join("\n"));
+  console.log(mesh.axialItems.map((r, ri) => (ri % 2 == 1 ? "  " : "") + r.filter(c => c != null).map(c => `[${pad(c?.output.wind[0]?.strength ?? "", 3)}]`).join(" ")).join("\n"));
 }
 
 describe("WindGenerator", () => {
@@ -65,8 +65,9 @@ describe("WindGenerator", () => {
         strength: 8.2
       });
 
-      const output = calculateWindOutput(meshItem, 1);
+      const outputs = calculateWindOutput(meshItem, 1);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(320);
       expect(output?.strength).toBe(8.2);
     });
@@ -76,7 +77,7 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, 1);
 
-      expect(output).toEqual(undefined);
+      expect(output).toEqual([]);
     });
 
     it("returns empty set if 0 strength inputs", () => {
@@ -85,7 +86,7 @@ describe("WindGenerator", () => {
 
       const output = calculateWindOutput(meshItem, 1);
 
-      expect(output).toEqual(undefined);
+      expect(output).toEqual([]);
     });
 
     it("maintains the wind strength when travelling on level terrain", () => {
@@ -99,8 +100,9 @@ describe("WindGenerator", () => {
       });
       meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180);
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(45);
       expect(output?.strength).toBe(10);
       // console.log(output.strength);
@@ -117,8 +119,9 @@ describe("WindGenerator", () => {
       });
       meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 }, type: MeshType.Ocean }), 0, 0, [], 45 + 180);
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(45);
       expect(output?.strength).toBe(10);
       // console.log(output.strength);
@@ -135,8 +138,9 @@ describe("WindGenerator", () => {
       });
       meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180);
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(45);
       expect(output?.strength).toBeLessThan(10);
       // console.log(output.strength);
@@ -153,8 +157,9 @@ describe("WindGenerator", () => {
       });
       meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180);
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(45);
       expect(output?.strength).toBeGreaterThan(10);
       // console.log(output.strength);
@@ -173,8 +178,9 @@ describe("WindGenerator", () => {
       // SE edge is 900m (to force it to pick a testable direction, NE)
       meshItem.initNeighbor(getSampleMeshItem({ height: 900, site: { x: 0.5, y: -1 } }), 0, 0, [], 60);
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBeGreaterThan(300);
       expect(output?.degrees).toBeLessThan(360);
       expect(output?.strength).toBeLessThan(10);
@@ -189,15 +195,16 @@ describe("WindGenerator", () => {
       meshItem.input.wind.add(45, { degrees: 45, strength: 10 });
       meshItem.input.wind.add(90, { degrees: 90, strength: 10 });
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
       const expectedDirection = (90 + 45) / 2;
-      expect(output?.degrees).toBe(expectedDirection);
-      expect(output?.strength).toBeGreaterThan(18); // max 20%
+      const output = outputs[0];
+      expect(output?.degrees).toBe(Math.round(expectedDirection));
+      expect(output?.strength).toBeGreaterThan(17); // expect some reduction do to  vectors + combination reduction
       expect(output?.strength).toBeLessThan(20);
     });
 
-    it("averages opposite but even wind onto a perpendicular with loss in strength", () => {
+    it("averages opposite but even wind - pretend this is convergence and air goes up?", () => {
       // 10mps wind travelling W
       // 10mps wind travelling E
       const pxPerKilometer = 1;
@@ -205,11 +212,11 @@ describe("WindGenerator", () => {
       meshItem.input.wind.add(0, { degrees: 0, strength: 10 });
       meshItem.input.wind.add(180, { degrees: 180, strength: 10 });
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
+      const output = outputs[0];
       expect(output?.degrees).toBe(90);
-      expect(output?.strength).toBeGreaterThanOrEqual(18); // max 20%
-      expect(output?.strength).toBeLessThan(20);
+      expect(output?.strength).toBe(0);
     });
 
     it("combines uneven winds in new direction based on relative strengths, with some loss in overall strength", () => {
@@ -220,11 +227,14 @@ describe("WindGenerator", () => {
       meshItem.input.wind.add(90, { degrees: 90, strength: 5 });
       meshItem.input.wind.add(0, { degrees: 0, strength: 10 });
 
-      const output = calculateWindOutput(meshItem, pxPerKilometer);
+      const outputs = calculateWindOutput(meshItem, pxPerKilometer);
 
-      expect(output?.degrees).toBe(90 * 1 / 3 + 0 * 2 / 3);
-      expect(output?.strength).toBeGreaterThan(15 * .8);  // max 20%
-      expect(output?.strength).toBeLessThan(15);
+      const output = outputs[0];
+      // roughly close to 30 degrees
+      expect(output?.degrees).toBeGreaterThan(25);
+      expect(output?.degrees).toBeLessThan(30);
+      // not much more than 10
+      expect(output?.strength).toBeCloseTo(11, 0);
     });
   });
 
@@ -265,6 +275,19 @@ describe("WindGenerator", () => {
       const output = calculateNeighborStrengths(input);
 
       expect(output).toStrictEqual(getEmptyDirectionsWith(expected));
+    });
+
+
+    it("splits 90 degree correctly", () => {
+      const input = {
+        degrees: 90,
+        strength: 10,
+        source: "test"
+      };
+
+      const output = calculateNeighborStrengths(input);
+
+      expect(output).toStrictEqual(getEmptyDirectionsWith({ 60: 5, 120: 5 }));
     });
 
     test.each`
@@ -418,6 +441,41 @@ describe("WindGenerator", () => {
         }
       });
     });
+    it("applies 220 degree wind to east + south cells only - but not SE corner", () => {
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      mesh.apply(m => m.type = MeshType.Ocean);
+      const initialWind = { degrees: 220, strength: 10 };
+
+      applyInitialWind(mesh, initialWind);
+
+      debugMesh(mesh);
+      const alreadyChecked = new Map<{ q: number, r: number }, boolean>();
+      mesh.edges.east.forEach((m, i) => {
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind.getLength()).toBe(1);
+          if (i % 2 == 0)
+            expect(m.input.wind.getFirst()).toEqual({ degrees: 220, strength: 10, source: "sum" });
+          else {
+            expect(m.input.wind.getFirst()?.degrees).toEqual(220);
+            expect(m.input.wind.getFirst()?.strength).toBeCloseTo(3.33);
+          }
+          alreadyChecked.set(m.axial, true);
+        }
+      });
+      mesh.edges.south.forEach(m => {
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind.getLength()).toBe(1);
+          expect(m.input.wind.getFirst()?.degrees).toEqual(220);
+          expect(m.input.wind.getFirst()?.strength).toBeCloseTo(6.666);
+          alreadyChecked.set(m.axial, true);
+        }
+      });
+      mesh.meshItems.forEach(m => {
+        if (!alreadyChecked.has(m.axial)) {
+          expect(m.input.wind.getLength()).toBe(0);
+        }
+      });
+    });
     it("applies 300 degree wind to west + south cells only - but not SW corner", () => {
       const mesh = new HexagonMesh(7, 8, 70, 80, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
@@ -499,9 +557,9 @@ describe("WindGenerator", () => {
 
       WindGenerator.calculateWindEffect(mesh, initialWind);
 
-      debugMesh(mesh);
+      debugMeshOutput(mesh);
       mesh.meshItems.forEach(m => {
-        expect(m.output.wind).toEqual({ degrees: 0, strength: 10 });
+        expect(m.output.wind).toEqual([{ degrees: 0, strength: 10, source: "combined" }]);
       });
     });
 
@@ -512,9 +570,9 @@ describe("WindGenerator", () => {
 
       WindGenerator.calculateWindEffect(mesh, initialWind);
 
-      debugMesh(mesh);
+      // debugMesh(mesh);
       mesh.meshItems.forEach(m => {
-        expect(m.output.wind).toEqual({ degrees: 0, strength: 10 });
+        expect(m.output.wind).toEqual([{ degrees: 0, strength: 10, source: "combined" }]);
       });
     });
 
@@ -531,7 +589,7 @@ describe("WindGenerator", () => {
           // complicated - some edge tiles will be 0's to prevent doubling up
         }
         else {
-          expect(m.output.wind).toEqual({ degrees: 60, strength: 10 });
+          expect(m.output.wind).toEqual([{ degrees: 60, strength: 10, source: "combined" }]);
         }
       });
     });
@@ -545,7 +603,35 @@ describe("WindGenerator", () => {
 
       debugMesh(mesh);
       mesh.meshItems.forEach(m => {
-        expect(m.output.wind).toEqual({ degrees: 45, strength: 10 });
+        expect(m.output.wind).toEqual([{ degrees: 45, strength: 10, source: "combined" }]);
+      });
+    });
+
+    // saw tooth edges on the sides need some values when wind is vertical
+    it("generates even initial wind for 90 degrees", () => {
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      mesh.apply(m => m.type = MeshType.Ocean);
+      const initialWind = { degrees: 90, strength: 10 };
+
+      WindGenerator.calculateWindEffect(mesh, initialWind);
+
+      // debugMeshOutput(mesh);
+      mesh.meshItems.forEach(m => {
+        expect(m.output.wind).toEqual([{ degrees: 90, strength: 10, source: "combined" }]);
+      });
+    });
+
+    // saw tooth edges on the sides need some values when wind is vertical
+    it("generates even initial wind for 240 degrees", () => {
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      mesh.apply(m => m.type = MeshType.Ocean);
+      const initialWind = { degrees: 220, strength: 10 };
+
+      WindGenerator.calculateWindEffect(mesh, initialWind);
+
+      debugMeshOutput(mesh);
+      mesh.meshItems.forEach(m => {
+        expect(m.output.wind).toEqual([{ degrees: 220, strength: 10, source: "combined" }]);
       });
     });
   });

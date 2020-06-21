@@ -1,3 +1,5 @@
+import * as Phaser from "phaser";
+import { combineWind } from "../generator/weather/windUtil";
 
 export enum Direction {
   Left,
@@ -16,21 +18,22 @@ export interface IInput {
 }
 
 export interface IOutput {
-  wind?: IWindMeasure;
+  wind: IWindMeasure[];
   water: number;
   dirt: number;
 }
 
 export class DirectionalIO<T extends IWindMeasure>{
+
   rawContents = new Map<number, T[]>();
   sumContents = new Map<number, T>();
   private _total = 0;
+  private _averageDegrees?: number;
 
   add(degrees: number, item: T) {
     if (!this.sumContents.has(degrees)) {
       this.rawContents.set(degrees, [item]);
       this.sumContents.set(degrees, item);
-      this._total += item.strength;
     }
     else {
       const all = this.rawContents.get(degrees) ?? [];
@@ -41,8 +44,10 @@ export class DirectionalIO<T extends IWindMeasure>{
         source: 'sum'
       };
       this.sumContents.set(degrees, newSum);
-      this._total += item.strength;
     }
+    const total = combineWind(this.mapSum(w => w));
+    this._total = Math.round(total.strength * 10) / 10;
+    this._averageDegrees = Math.round(total.degrees);
   }
 
   hasAny() {
@@ -76,6 +81,10 @@ export class DirectionalIO<T extends IWindMeasure>{
 
   getTotal() {
     return this._total;
+  }
+
+  getAveragedDegrees() {
+    return this._averageDegrees;
   }
 
   getRaw(degrees: number) {
