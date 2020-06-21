@@ -151,19 +151,29 @@ export const applyAdjustmentsForPressure = (queue: HexagonMeshItem[]) => {
     const leftTarget = m.getNeighbor(leftTargetDegrees);
     let leftMagnitude = leftTarget?.meshItem.input.wind.getTotal() ?? 0;
     const leftHeight = leftTarget ? getUsableHeight(leftTarget.meshItem) : 0;
-    leftMagnitude += (leftHeight ?? 0 > getUsableHeight(m)) ? .5 * leftMagnitude : 0;
+    leftMagnitude += (leftHeight ?? 0 > getUsableHeight(m)) ? .15 * leftMagnitude : 0;
     const rightTargetDegrees = getNextHighestEvenEdge(combinedDirection);
     const rightTarget = m.getNeighbor(rightTargetDegrees);
     let rightMagnitude = rightTarget?.meshItem.input.wind.getTotal() ?? 0;
     const rightHeight = rightTarget ? getUsableHeight(rightTarget.meshItem) : 0;
-    rightMagnitude += (rightHeight ?? 0 > getUsableHeight(m)) ? .5 * rightMagnitude : 0;
+    rightMagnitude += (rightHeight ?? 0 > getUsableHeight(m)) ? .15 * rightMagnitude : 0;
+
+    // when I add +/- 10 degrees to amount of pressure direction it distorts bottom corner in ocean
+    //  when using 0 degrees, when I don't add adjustment it's fine?
+    //  - degrees aren't being calculated correctly and it's adjusting when I don think it is
+    //  - border edges aren't being calculated correctly
+    //  - original direction +/- 30 seems pretty good?
+
+    // TODO - why is simulation loop going 200 steps on wind?
 
     // faking slope impact with a straight multiplier for now
     if (leftTarget && leftMagnitude < combinedStrength) {
       // apply adjustments to turn left more
       const strDiff = (combinedStrength - leftMagnitude) / 3;
       if (strDiff < 1) return;
-      const newDir = leftTarget.edge.degrees - 15; // magic number
+      // const newDir = (360 + leftTarget.edge.degrees - 10) % 360; // magic number
+      // const newDir = (360 + leftTarget.edge.degrees) % 360; // magic number
+      const newDir = (360 + combinedDirection - 30) % 360; // magic number
       // remove input, add input
       const debitDirection = (combinedDirection + 180) % 360;
       m.input.wind.add(debitDirection, { degrees: debitDirection, strength: strDiff, source: "-pressure adj." });
@@ -173,8 +183,10 @@ export const applyAdjustmentsForPressure = (queue: HexagonMeshItem[]) => {
     if (rightTarget && rightMagnitude < combinedStrength) {
       // apply adjustments to turn right more
       const strDiff = (combinedStrength - rightMagnitude) / 3;
-      if (strDiff < 1 || strDiff / combinedDirection < .5) return;
-      const newDir = rightTarget.edge.degrees + 15; // magic number
+      if (strDiff < 1) return;
+      // const newDir = (rightTarget.edge.degrees + 10) % 360; // magic number
+      // const newDir = (rightTarget.edge.degrees) % 360; // magic number
+      const newDir = (combinedDirection + 30) % 360; // magic number
       // remove input, add input
       const debitDirection = (combinedDirection + 180) % 360;
       m.input.wind.add(debitDirection, { degrees: debitDirection, strength: strDiff, source: "-pressure adj." });
@@ -331,9 +343,9 @@ export const roughlySame = (a: IWindMeasure | undefined, b: IWindMeasure | undef
 
 export const setRoughlySame = (a: IWindMeasure[], b: IWindMeasure[]) => {
   return a.length === b.length &&
-    (a.length >= 1 && roughlySame(a[0], b[0])) &&
-    (a.length >= 2 && roughlySame(a[1], b[1])) &&
-    (a.length == 3 && roughlySame(a[2], b[2]));
+    (a.length < 1 || roughlySame(a[0], b[0])) &&
+    (a.length < 2 || roughlySame(a[1], b[1])) &&
+    (a.length < 3 || (a.length == 3 && roughlySame(a[2], b[2])));
 };
 
 export const applyOutputsToNeighborInputsA = (output: IWindMeasure, source: HexagonMeshItem, queueOnlyOnce: (m: HexagonMeshItem) => void) => {
@@ -451,5 +463,3 @@ export const WindGenerator = {
   }
 };
 
-
-// TODO - wind is not adding up correctly when split between tiles

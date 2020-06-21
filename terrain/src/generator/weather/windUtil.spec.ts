@@ -29,8 +29,8 @@ describe("combineWind", () => {
 
     const originalResult = combineWind(original);
     const adjustedResult = combineWind(adjusted);
-    console.log(original);
-    console.log(adjusted);
-    expect(originalResult.strength).toBeCloseTo(adjustedResult.strength);
+    // console.log(originalResult);
+    // console.log(adjustedResult);
+    expect(originalResult.strength).toBeCloseTo(adjustedResult.strength, 1);
   });
 });

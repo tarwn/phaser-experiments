@@ -289,21 +289,21 @@ export class HybridScene extends Phaser.Scene {
       case strength <= 5.5:
         return { color: 0xccccff, alpha: 0.2 }; // 3. Gentle Breeze
       case strength <= 7.9:
-        return { color: 0xccffff, alpha: 0.2 }; // 4. Moderate Breeze
+        return { color: 0xccffff, alpha: 0.3 }; // 4. Moderate Breeze
       case strength <= 10.7:
         return { color: 0xccffff, alpha: 0.3 }; // 5. Fresh breeze
       case strength <= 13.8:
-        return { color: 0xccffff, alpha: 0.3 }; // 6. Strong breeze
+        return { color: 0xccffff, alpha: 0.4 }; // 6. Strong breeze
       case strength < 17.1:
-        return { color: 0xffffcc, alpha: 0.3 }; // 7. High Wind
+        return { color: 0xffffcc, alpha: 0.5 }; // 7. High Wind
       case strength <= 20.7:
         return { color: 0xff9999, alpha: 0.5 }; // 8. Gale
       case strength <= 24.4:
-        return { color: 0xff9999, alpha: 0.5 }; // 9. Strong Gale
+        return { color: 0xff9999, alpha: 0.7 }; // 9. Strong Gale
       case strength <= 28.4:
-        return { color: 0xff3333, alpha: 0.5 }; // 10. Storm
+        return { color: 0xff3333, alpha: 0.7 }; // 10. Storm
       case strength <= 32.6:
-        return { color: 0xff3333, alpha: 0.5 }; // 11. Violent Storm
+        return { color: 0xff3333, alpha: 0.7 }; // 11. Violent Storm
       default:
         return { color: 0xFF0000, alpha: .9 }; // 12. Hurricane
     }
@@ -325,10 +325,9 @@ export class HybridScene extends Phaser.Scene {
     // });
     const windmap = this.add.group();
     this.hexMesh?.apply(m => {
-      const drawArrow = (m.output.wind && m.axial.q % 3 == 0 && m.axial.r % 3 == 0);
-      if (drawArrow) {
+      if (m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
         m.output.wind.forEach((w, i) => {
-          if (w.strength > .1) {
+          if (w.strength > .25) {
             const points = [
               { x: 0, y: 0 },
               { x: -3, y: 3 },
@@ -339,7 +338,7 @@ export class HybridScene extends Phaser.Scene {
               { x: -3, y: -3 }
             ];
             const color = this.getColorFromScale(w.strength);
-            const wind = this.add.polygon(m.site.x + i * 3, m.site.y + i * 3, points, color.color, color.alpha + .5)
+            const wind = this.add.polygon(m.site.x + i * 3, m.site.y + i * 3, points, color.color, color.alpha)
               .setOrigin(0, 0)
               .setDepth(depth)
               .setRotation(Phaser.Math.DegToRad(w.degrees));
