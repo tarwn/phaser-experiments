@@ -9,4 +9,22 @@ declare module 'phaser3-plugin-isometric' {
     get isoZ(): number;
     set isoZ(value: number);
   }
+
+  export class IsoScene extends Phaser.Scene {
+    constructor(config: string | Phaser.Types.Scenes.SettingsConfig);
+    iso: {
+      projector: {
+        origin: {
+          setTo: (x: number, y: number) => void;
+        }
+      }
+    };
+    add: IsoSpriteFactory;
+  }
+
+  export class IsoSpriteFactory extends Phaser.GameObjects.GameObjectFactory {
+    isoSprite: (x: number, y: number, z: number, key: string | Phaser.GameObjects.RenderTexture, frame?: string | number) => IsoSprite;
+  }
+
+  export const IsoPlugin: () => {}
 }

@@ -5,7 +5,8 @@ module.exports = function (wallaby) {
       // '!terrain/src/**/*.spec.ts',
       // '!terrain/src/typings/*.ts',
       'water/src/**/*',
-      '!water/src/**/*.spec.ts'
+      '!water/src/**/*.spec.ts',
+      '!water/src/typings/*.ts'
     ],
     tests: [
       // 'terrain/src/**/*.spec.ts',
