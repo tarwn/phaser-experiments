@@ -4,6 +4,7 @@ interface IStep {
   name: string;
   exec: () => any;
   repeatUntil: (i: number, out: any, prevOut: any) => boolean;
+  outputLimit?: number;
 };
 
 const NEVER_REPEAT = () => true;
@@ -32,12 +33,12 @@ export class Simulation {
     return this;
   }
 
-  repeat(name: string, exec: () => any) {
-    this.steps.push({ name, exec, repeatUntil: NEVER_REPEAT });
+  repeat(name: string, exec: () => any, outputLimit?: number) {
+    this.steps.push({ name, exec, repeatUntil: NEVER_REPEAT, outputLimit });
     return this;
   }
 
-  until(repeatUntil: (i: number, out: any, prevOut: any) => boolean): any {
+  until(repeatUntil: (i: number, out: any, prevOut: any) => boolean) {
     if (this.steps.length === 0) {
       throw new Error("Cannot add an until when there isn't a starting repeat");
     }
@@ -108,7 +109,9 @@ export class Simulation {
       console.error(e);
     }
     finally {
-      this.endLog(this.stepAttempts === 0, `Simulation:${step.name}`, count);
+      if (step.outputLimit == undefined || this.stepAttempts % step.outputLimit === 0) {
+        this.endLog(this.stepAttempts === 0, `Simulation:${step.name}`, count);
+      }
     }
     this.isRunning = false;
   }

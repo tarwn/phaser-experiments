@@ -21,7 +21,7 @@ export const MountainIslandGenerator = {
         queue.push(closest);
         closest.height = p.height;
         // using input water as a flag that we have adjusted the height already
-        closest.input.water = 1;
+        closest.water.state = 1;
       }
     });
 
@@ -29,10 +29,10 @@ export const MountainIslandGenerator = {
       const height = queue[i].height * (1 - rng() * peakFalloffRate);
       queue[i].rawNeighbors.forEach((n, i) => {
         if (n != null && n.meshItem != null) {
-          if (n.meshItem.input.water === 0) {
+          if (n.meshItem.water.state === 0) {
             queue.push(n.meshItem);
             n.meshItem.height = height * (1 - i / 100); // just a little bit of differentiation of heights
-            n.meshItem.input.water = 1;
+            n.meshItem.water.state = 1;
           }
           else if (n.meshItem.height < height) {
             n.meshItem.height = (n.meshItem.height + height + height) / 3;

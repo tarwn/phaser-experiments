@@ -1,6 +1,7 @@
 // import * as Phaser from "phaser";
-import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IOutput, IInput } from "./types";
-import { getEmptyInput, getEmptyOutput } from "./Mesh";
+import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IWeatherState, IWaterState, IHumidityState } from "./types";
+import { getEmptyWeather, getEmptyWater, getEmptyHumidity } from "./Mesh";
+import { calculateSlope } from "../generator/heightmap/heightUtil";
 
 export interface IHexagonMeshItem extends IMeshItem {
   points: IVertex[];
@@ -23,6 +24,7 @@ interface IHexagonEdge {
   r: number;
   points: IVertex[];
   degrees: number;
+  slope?: number;
 }
 
 export class HexagonMeshItem implements IHexagonMeshItem {
@@ -33,8 +35,9 @@ export class HexagonMeshItem implements IHexagonMeshItem {
   site: IPixelPoint;
   isMapEdge: boolean;
   height: number;
-  input: IInput;
-  output: IOutput;
+  water: IWaterState;
+  weather: IWeatherState;
+  humidity: IHumidityState;
   type: MeshType;
 
   constructor(axial: IAxialPoint, site: IPixelPoint, isMapEdge: boolean, height: number, type: MeshType, points: IVertex[]) {
@@ -44,8 +47,9 @@ export class HexagonMeshItem implements IHexagonMeshItem {
     this.height = height;
     this.type = type;
     this.points = points;
-    this.input = getEmptyInput();
-    this.output = getEmptyOutput();
+    this.water = getEmptyWater();
+    this.weather = getEmptyWeather();
+    this.humidity = getEmptyHumidity();
     this.rawNeighbors = new Array<IHexagonMeshNeighbor>();
   }
 
@@ -59,12 +63,13 @@ export class HexagonMeshItem implements IHexagonMeshItem {
     this._indexedNeighbors.set(degrees, neighbor);
     this.rawNeighbors.push(neighbor);
   }
-  initNeighbor(neighbor: HexagonMeshItem | undefined, q: number, r: number, edgePoints: IVertex[], degrees: number) {
+  initNeighbor(neighbor: HexagonMeshItem | undefined, q: number, r: number, edgePoints: IVertex[], degrees: number, pxToKilometers: number) {
     if (!neighbor) return;
+    const slope = calculateSlope(this, neighbor, pxToKilometers);
     this.setNeighbor({
       site: neighbor.site,
       meshItem: neighbor,
-      edge: { q, r, points: edgePoints, degrees }
+      edge: { q, r, points: edgePoints, degrees, slope }
     }, degrees);
   }
 
@@ -223,12 +228,12 @@ export class HexagonMesh implements IMesh {
 
     // calculate neighbors
     this.apply(m => {
-      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r - 1), 1, -1, [m.points[0], m.points[1]], 300);
-      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r + 0), 1, 0, [m.points[1], m.points[2]], 0);
-      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r + 1), 0, 1, [m.points[2], m.points[3]], 60);
-      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 1), -1, 1, [m.points[3], m.points[4]], 120);
-      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 0), -1, 0, [m.points[4], m.points[5]], 180);
-      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r - 1), 0, -1, [m.points[5], m.points[0]], 240);
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r - 1), 1, -1, [m.points[0], m.points[1]], 300, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r + 0), 1, 0, [m.points[1], m.points[2]], 0, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r + 1), 0, 1, [m.points[2], m.points[3]], 60, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 1), -1, 1, [m.points[3], m.points[4]], 120, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 0), -1, 0, [m.points[4], m.points[5]], 180, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r - 1), 0, -1, [m.points[5], m.points[0]], 240, this.pxToKilometer);
     });
 
     // make sure edges are populated correctly

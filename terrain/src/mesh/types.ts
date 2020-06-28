@@ -11,17 +11,42 @@ export enum MeshType {
   Ocean
 }
 
-export interface IInput {
-  wind: DirectionalIO<IWindMeasure>;
-  water: number;
-  dirt: number;
+export interface IWeatherState {
+  wind: {
+    input: DirectionalIO<IWindMeasure>;
+    state: IWindMeasure[];
+    sources: Map<IAxialPoint, IMeshItem>;
+  }
 }
 
-export interface IOutput {
-  wind: IWindMeasure[];
-  water: number;
-  dirt: number;
+export interface IWaterState {
+  state: number;
+  sim: {
+    waterIn: number;
+    dirtIn: number;
+    dirtOut: number;
+  }
 }
+
+export interface IHumidityState {
+  state: number;
+  sim: {
+    humidityOut: number;
+    humidityIn: number;
+  };
+}
+
+// export interface IInput {
+//   wind: DirectionalIO<IWindMeasure>;
+//   water: number;
+//   dirt: number;
+// }
+
+// export interface IOutput {
+//   wind: IWindMeasure[];
+//   water: number;
+//   dirt: number;
+// }
 
 export class DirectionalIO<T extends IWindMeasure>{
 
@@ -138,8 +163,9 @@ export interface IMeshItem {
   site: IPixelPoint;
   isMapEdge: boolean;
   height: number;
-  input: IInput;
-  output: IOutput;
+  water: IWaterState;
+  weather: IWeatherState;
+  humidity: IHumidityState;
   type: MeshType;
   rawNeighbors: IMeshNeighbor[];
   points: IVertex[];

@@ -1,5 +1,5 @@
 import Voronoi from "voronoi";
-import { IMeshItem, Direction, MeshType, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh, DirectionalIO, IWindMeasure, IOutput, IInput } from "./types";
+import { IMeshItem, Direction, MeshType, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh, DirectionalIO, IWindMeasure, IWeatherState, IWaterState, IAxialPoint, IHumidityState } from "./types";
 
 export const createVoronoi = (siteCount: number, width: number, height: number, rng: seedrandom.prng): Voronoi.VoronoiDiagram => {
   const voronoi = new Voronoi();
@@ -11,20 +11,54 @@ export const createVoronoi = (siteCount: number, width: number, height: number, 
   return voronoi.compute(sites, boundingbox);
 };
 
-export const getEmptyInput = (): IInput => {
+// export const getEmptyInput = (): IInput => {
+//   return {
+//     water: 0,
+//     dirt: 0,
+//     wind: new DirectionalIO<IWindMeasure>()
+//   } as IInput;
+// };
+// export const getEmptyOutput = (): IOutput => {
+//   return {
+//     water: 0,
+//     dirt: 0,
+//     wind: []
+//   } as IOutput;
+// };
+
+export const getEmptyWeather = (): IWeatherState => {
   return {
-    water: 0,
-    dirt: 0,
-    wind: new DirectionalIO<IWindMeasure>()
-  } as IInput;
+    wind: {
+      input: new DirectionalIO<IWindMeasure>(),
+      state: new Array<IWindMeasure>(),
+      sources: new Map<IAxialPoint, IMeshItem>()
+    }
+  };
 };
-export const getEmptyOutput = (): IOutput => {
+
+export const getEmptyWater = (): IWaterState => {
   return {
-    water: 0,
-    dirt: 0,
-    wind: []
-  } as IOutput;
+    state: 0,
+    sim: {
+      waterIn: 0,
+      dirtIn: 0,
+      dirtOut: 0
+    }
+  };
 };
+
+export const getEmptyHumidity = (): IHumidityState => {
+  return {
+    state: 0,
+    sim: {
+      humidityOut: 0,
+      humidityIn: 0
+    }
+  };
+};
+
+
+// voronoi - refactor below
 
 const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem | null, halfEdge: Voronoi.Halfedge): IVoronoiMeshNeighbor => ({
   site,
@@ -32,6 +66,7 @@ const createNeighbor = (site: Voronoi.Site, dir: Direction, meshItem: IMeshItem 
   meshItem,
   halfEdge
 });
+
 
 const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
   const mesh = voronoi.cells.map(c => {
@@ -45,8 +80,8 @@ const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
       rawNeighbors,
       isMapEdge: false,
       height: 0,
-      input: getEmptyInput(),
-      output: getEmptyOutput(),
+      water: getEmptyWater(),
+      weather: getEmptyWeather(),
       type: MeshType.Land
     };
     return newItem;

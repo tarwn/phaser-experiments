@@ -4,10 +4,10 @@ export const ErosionSimulation = {
   initialize: (mesh: IMesh, maxDepth: number) => {
     // dump a bunch of dirt, water, and erosion on it
     mesh.apply(m => {
-      m.output.water = 40;
-      m.input.water = 0;
-      m.output.dirt = 0;
-      m.input.dirt = 0;
+      m.water.state = 40;
+      m.water.sim.waterIn = 0;
+      m.water.sim.dirtOut = 0;
+      m.water.sim.dirtIn = 0;
 
       if (m.isMapEdge) {
         // m.height = -1 * maxDepth;
@@ -23,7 +23,7 @@ export const ErosionSimulation = {
         if (prev === null || prev.meshItem === null) {
           return n;
         }
-        else if (n.meshItem && n.meshItem.height < prev.meshItem.height && n.meshItem.output.water < m.output.water) {
+        else if (n.meshItem && n.meshItem.height < prev.meshItem.height && n.meshItem.water.state < m.water.state) {
           return n;
         }
         else {
@@ -31,14 +31,14 @@ export const ErosionSimulation = {
         }
       });
       if (lowest && lowest.meshItem) {
-        if (m.output.water > 0 && lowest.meshItem.height < m.height) {
+        if (m.water.state > 0 && lowest.meshItem.height < m.height) {
           // move a unit of water + up to 5% difference of dirt
-          m.output.water = -1;
-          lowest.meshItem.input.water += 1;
-          m.output.dirt = -.1 * (m.height - lowest.meshItem.height);
+          m.water.state = -1;
+          lowest.meshItem.water.sim.waterIn += 1;
+          m.water.sim.dirtOut = -.1 * (m.height - lowest.meshItem.height);
           // if it's a map edge, skip: dirt erodes into the broader ocean
           if (!lowest.meshItem.isMapEdge) {
-            lowest.meshItem.input.dirt += m.output.dirt;
+            lowest.meshItem.water.sim.dirtIn += m.water.sim.dirtOut;
           }
         }
       }
@@ -47,20 +47,20 @@ export const ErosionSimulation = {
     // apply step + return outstanding water
     const waterRemaining = mesh.reduce((total, m) => {
       if (m.isMapEdge) {
-        m.output.water = 0;
-        m.input.water = 0;
-        m.input.dirt = 0;
-        m.output.dirt = 0;
+        m.water.state = 0;
+        m.water.sim.waterIn = 0;
+        m.water.sim.dirtIn = 0;
+        m.water.sim.dirtOut = 0;
       }
       else {
-        m.output.water += m.input.water;
-        m.input.water = 0;
-        m.height += m.output.dirt;
-        m.height += m.input.dirt;
-        m.input.dirt = 0;
-        m.output.dirt = 0;
+        m.water.state += m.water.sim.waterIn;
+        m.water.sim.waterIn = 0;
+        m.height += m.water.sim.dirtOut;
+        m.height += m.water.sim.dirtIn;
+        m.water.sim.dirtIn = 0;
+        m.water.sim.dirtOut = 0;
       }
-      return total + m.output.water;
+      return total + m.water.state;
     }, 0);
 
     return { waterRemaining };

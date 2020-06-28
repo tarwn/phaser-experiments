@@ -1,14 +1,16 @@
 import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { MeshType, IMesh, IWindMeasure } from "../mesh/types";
-import { createVoronoi, Mesh, getEmptyInput, getEmptyOutput } from "../mesh/Mesh";
+import { MeshType, IMesh, IWindMeasure, IHumidityState } from "../mesh/types";
+import { createVoronoi, Mesh, getEmptyWeather } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 import { HexagonMesh } from "../mesh/HexagonMesh";
 import { WindGenerator } from "../generator/weather/WindGenerator";
+import { calculateSlope } from "../generator/heightmap/heightUtil";
+import { HumidityGenerator } from "../generator/weather/humidity/HumidityGenerator";
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -23,6 +25,9 @@ const HEXAGON_HEIGHT = 8 * 1.2;
 const PX_TO_KM = 0.5; // horizantal/hex pixels per km
 const INITIAL_WIND_SPEED_MPS = 6;
 const INITIAL_WIND_DIR = 0;
+const EVAPORATION_RATE = 0.50;
+const TRANSPIRATION_RATE = 0.01;
+const PRECIPITATION_RATE = 0.025;
 
 export class HybridScene extends Phaser.Scene {
   width: number;
@@ -43,6 +48,7 @@ export class HybridScene extends Phaser.Scene {
     heightMap?: Phaser.GameObjects.Group;
     coastline?: Phaser.GameObjects.Group;
     windmap?: Phaser.GameObjects.Group;
+    humidityMap?: Phaser.GameObjects.Group;
   };
   hexWidth: number;
   hexHeight: number;
@@ -71,8 +77,11 @@ export class HybridScene extends Phaser.Scene {
       .queue("erosion start", () => ErosionSimulation.initialize(this.hexMesh || this.mesh, INITIAL_HEIGHT_SCALE_M))
       .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.hexMesh || this.mesh))
       .until((i, out, last) => i >= 10 && out != last)
-      .queue("identify ocean", () => this.assignMeshType())
+      .queue("recalculate slopes", () => this.recalculateSlopes())
+      .queue("identify ocean & initialize weather", () => this.assignMeshType())
       .queue("calculate initial winds", () => WindGenerator.calculateWindEffect(this.hexMesh as HexagonMesh, this.initialWind))
+      .repeat("calculate humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE), 5)
+      .until((i, out, last) => i >= 50 || out === 0)
       .complete();
 
     this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
@@ -108,11 +117,17 @@ export class HybridScene extends Phaser.Scene {
         // this.redrawMesh(0, this.hexMesh || this.mesh, false);
         this.redrawMesh(0, this.mesh, true);
         break;
-      case "identify ocean":
+      case "identify ocean & initialize weather":
         this.redrawCoastline(2);
         break;
       case "calculate initial winds":
         this.redrawWindMap(3);
+        break;
+      case "calculate humidity & precipitation":
+        if (args.attemptNumber % 5 == 0) {
+          this.redrawHumidity(4);
+        }
+        break;
     }
   }
 
@@ -124,13 +139,24 @@ export class HybridScene extends Phaser.Scene {
     this.mesh = new Mesh(this.voronoi, this.width, this.height);
   }
 
+  recalculateSlopes() {
+    this.hexMesh?.apply(m => {
+      m.rawNeighbors.forEach(n => {
+        n.edge.slope = calculateSlope(m, n.meshItem, this.pxToKilometers);
+      });
+    });
+  }
+
   assignMeshType() {
     this.hexMesh?.apply(m => {
       if (m.height < 0) {
         m.type = MeshType.Ocean;
+        m.water.state = 1;
       }
-      m.input = getEmptyInput();
-      m.output = getEmptyOutput();
+      else {
+        m.water.state = 0;
+      }
+      m.weather = getEmptyWeather();
     });
   }
 
@@ -312,8 +338,8 @@ export class HybridScene extends Phaser.Scene {
   drawWindMap(depth: number): any {
     // const windmap = [] as Phaser.GameObjects.Line[];
     // this.hexMesh?.apply(m => {
-    //   if (m.output.wind.length > 0) {
-    //     m.output.wind.forEach(w => {
+    //   if (m.weather.wind.state.length > 0) {
+    //     m.weather.wind.state.forEach(w => {
     //       const wind = this.add.line(m.site.x, m.site.y, 0, 0, (this.hexWidth + this.hexHeight) / 2, 0)
     //         .setOrigin(0, 0)
     //         .setDepth(depth)
@@ -326,7 +352,7 @@ export class HybridScene extends Phaser.Scene {
     const windmap = this.add.group();
     this.hexMesh?.apply(m => {
       if (m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
-        m.output.wind.forEach((w, i) => {
+        m.weather.wind.state.forEach((w, i) => {
           if (w.strength > .25) {
             const points = [
               { x: 0, y: 0 },
@@ -357,5 +383,48 @@ export class HybridScene extends Phaser.Scene {
     });
     // console.log(windmap);
     return windmap;
+  }
+
+  redrawHumidity(depth: number) {
+    if (this.graphics.humidityMap) {
+      this.graphics.humidityMap.clear(true, true);
+    }
+    this.graphics.humidityMap = this.drawHumidity(depth, this.hexMesh!);
+  }
+  getHumidityColor(humidity: IHumidityState) {
+    const color = Phaser.Display.Color.HSLToColor(0, 0, 1 - humidity.sim.humidityOut / .5);
+    return {
+      color,
+      alpha: Math.max(0.3, humidity.state / 3)
+    };
+    // return {
+    //   color: 0xFF0000,
+    //   alpha: 1
+    // };
+  }
+  drawHumidity(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    mesh.apply(m => {
+      if (m.humidity.state > 0) {
+        // const color = m.isMapEdge ? { color: 0xff0000, alpha: 1 } : this.getHeightMapColor(m.height);
+        const color = this.getHumidityColor(m.humidity);
+        const p = this.add.circle(m.site.x, m.site.y, 2, color.color.color, color.alpha)
+          .setOrigin(0, 0)
+          .setDepth(depth);
+        polygons.add(p);
+
+        // if (m.axial.q % 3 == 0 && m.axial.r % 3 == 0 && m.type == MeshType.Land) {
+        //   const text = this.add.text(m.site.x - 3.5, m.site.y - 4, Math.round(m.humidity.state * 100).toString())
+        //     .setOrigin(0, 0)
+        //     .setDepth(depth + 1)
+        //     .setFontSize(8)
+        //     .setAlpha(1)
+        //     .setStroke("0xff0000", 1);
+        //   polygons.add(text);
+        // }
+
+      }
+    });
+    return polygons;
   }
 }
