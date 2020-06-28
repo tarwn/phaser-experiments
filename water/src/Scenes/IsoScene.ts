@@ -1,14 +1,13 @@
 import * as Phaser from "phaser";
+import IsoPlugin, { IsoSprite } from "phaser3-plugin-isometric";
 import seedrandom = require("seedrandom");
 import { makeNoise2D } from "open-simplex-noise";
 import { Simulation, ISimulationStepEvent } from "../Simulation";
 import { Drop } from "../water/Drop";
-import { DIM, TILE_SIZE, LOOP_LOG_COUNT, LOOP_COUNT, MAX_HEIGHT, NOISE_SCALE, DROP_VOLUME_TO_HEIGHT_FACTOR, SEDIMENT_EROSION_AS_HEIGHT_FACTOR, SCALE, LOOP_GRAPHICS_COUNT, SEED } from "./settings";
+import { DIM, SEED, LOOP_COUNT, LOOP_LOG_COUNT, MAX_HEIGHT, NOISE_SCALE, DROP_VOLUME_TO_HEIGHT_FACTOR, SEDIMENT_EROSION_AS_HEIGHT_FACTOR, SCALE, LOOP_GRAPHICS_COUNT, TILE_SIZE } from "./settings";
 import { getIndex, getLocation, getColorFromHeight, getWaterColorFromHeight } from "./common";
 
-
-
-export class BasicScene extends Phaser.Scene {
+export class IsoScene extends Phaser.Scene {
   heightMap!: number[];
   originalHeightMap!: number[];
   waterPath!: number[];
@@ -17,29 +16,26 @@ export class BasicScene extends Phaser.Scene {
   erodedCount = 0;
   simulation!: Simulation;
   graphics = {
-    heightMap: new Array<Phaser.GameObjects.Sprite>(DIM.x * DIM.y),
-    waterPool: new Array<Phaser.GameObjects.Sprite | undefined>(DIM.x * DIM.y),
-    waterPath: new Array<Phaser.GameObjects.Sprite | undefined>(DIM.x * DIM.y)
-    // heightMap: new Array<IsoSprite>(DIM.x * DIM.y),
-    // waterPool: new Array<IsoSprite | undefined>(DIM.x * DIM.y),
-    // waterPath: new Array<IsoSprite | undefined>(DIM.x * DIM.y)
+    heightMap: new Array<IsoSprite>(DIM.x * DIM.y),
+    waterPool: new Array<IsoSprite | undefined>(DIM.x * DIM.y),
+    waterPath: new Array<IsoSprite | undefined>(DIM.x * DIM.y)
   };
   isoGroup!: Phaser.GameObjects.Group;
   rng!: seedrandom.prng;
 
   constructor() {
     super({
-      key: "BasicScene",
+      key: "IsoScene",
       mapAdd: { isoPlugin: "iso" }
     });
   }
 
   preload() {
-    // this.load.scenePlugin({
-    //   key: 'IsoPlugin',
-    //   url: IsoPlugin,
-    //   sceneKey: 'iso'
-    // });
+    this.load.scenePlugin({
+      key: 'IsoPlugin',
+      url: IsoPlugin,
+      sceneKey: 'iso'
+    });
     this.load.spritesheet("blank", "assets/blank.png", {
       frameWidth: 4,
       frameHeight: 4,
@@ -48,8 +44,18 @@ export class BasicScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setZoom(0.5);
-    this.cameras.main.centerOn(DIM.x / 2 * TILE_SIZE, DIM.y / 2 * TILE_SIZE);
+    this.isoGroup = this.add.group();
+    this.iso.projector.origin.setTo(0, -0.1);
+    this.cameras.main.setZoom(0.45);
+    this.cameras.main.centerOn(0, 0);
+    // this.cameras.main.setOrigin(0, 0);
+    // this.cameras.main.setScroll(0,0);
+    // this.cameras.main.setZoom(3);
+    // this.cameras.main.centerOn(DIM.x / 2 * TILE_SIZE, DIM.y / 2 * TILE_SIZE);
+    // this.cameras.main.setBounds(0, 0, DIM.x, DIM.y);
+    // this.cameras.main.x = DIM.x / 2;
+    // this.cameras.main.y = DIM.y / 2;
+    // this.cameras.main.setViewport(0, 0, DIM.x, DIM.y);
 
     this.rng = seedrandom(SEED);
     this.heightMap = new Array(DIM.x * DIM.y).fill(20.0);
@@ -105,8 +111,6 @@ export class BasicScene extends Phaser.Scene {
     }
     // console.log(this.heightMap);
   }
-
-
 
   applyErosion() {
     // console.group("Drop");
@@ -165,10 +169,11 @@ export class BasicScene extends Phaser.Scene {
 
   }
 
+
   initGraphics() {
     this.heightMap.forEach((h, i) => {
       const loc = getLocation(i);
-      this.graphics.heightMap[i] = this.add.sprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, "blank");
+      this.graphics.heightMap[i] = this.add.isoSprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, h, 'blank');
       if (i == 0) {
         this.graphics.heightMap[i].setTint(0xff0000);
       }
@@ -183,7 +188,6 @@ export class BasicScene extends Phaser.Scene {
       }
       this.graphics.heightMap[i].setScale(TILE_SIZE / 4);
       this.graphics.heightMap[i]!.setDepth(1);
-      this.graphics.heightMap[i]!.setAlpha(1);
     });
     this.updateGraphics();
   }
@@ -193,11 +197,13 @@ export class BasicScene extends Phaser.Scene {
     this.heightMap.forEach((h, i) => {
       if (this.originalHeightMap[i] != h) {
         if (this.graphics.heightMap[i] !== undefined) {
+          this.graphics.heightMap[i].isoZ = h;
           this.graphics.heightMap[i].setTint(getColorFromHeight(h).color);
           this.graphics.heightMap[i]!.setDepth(1);
           this.graphics.heightMap[i]!.setScale(TILE_SIZE / 4);
         }
       }
+      this.graphics.heightMap[i]!.setAlpha(0.5);
     });
     // waterpath
     this.waterPath.forEach((h, i) => {
@@ -207,13 +213,14 @@ export class BasicScene extends Phaser.Scene {
       else
         if (this.waterPath[i] > 0 && this.graphics.waterPath[i] === undefined) {
           const loc = getLocation(i);
-          this.graphics.waterPath[i] = this.add.sprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, 'blank');
+          this.graphics.waterPath[i] = this.add.isoSprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, (this.heightMap[i] ?? 0) + 0.1, 'blank');
           this.graphics.waterPath[i]?.setAlpha(h);
           this.graphics.waterPath[i]!.setTint(0x0055BB);
           this.graphics.waterPath[i]!.setDepth(2);
           this.graphics.waterPath[i]!.setScale(TILE_SIZE / 4);
         }
         else if (this.waterPath[i] > 0) {
+          this.graphics.waterPath[i]!.isoZ = (this.heightMap[i] ?? 0) + 0.1;
           this.graphics.waterPath[i]?.setAlpha(h);
         }
         else if (this.waterPath[i] <= 0 && this.graphics.waterPath[i] !== undefined) {
@@ -227,7 +234,7 @@ export class BasicScene extends Phaser.Scene {
       if (this.waterPool[i] > 0 && this.graphics.waterPool[i] === undefined) {
         const loc = getLocation(i);
         const height = this.waterPool[i] + this.heightMap[i];
-        this.graphics.waterPool[i] = this.add.sprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, 'blank');
+        this.graphics.waterPool[i] = this.add.isoSprite(loc.x * TILE_SIZE, loc.y * TILE_SIZE, (this.heightMap[i] ?? 0) + h, 'blank');
         this.graphics.waterPool[i]!.setTint(getWaterColorFromHeight(height).color);
         this.graphics.waterPool[i]!.setDepth(3);
         this.graphics.waterPool[i]!.setScale(TILE_SIZE / 4);
@@ -237,6 +244,7 @@ export class BasicScene extends Phaser.Scene {
         const height = this.waterPool[i] + this.heightMap[i];
         this.graphics.waterPool[i]!.setTint(getWaterColorFromHeight(height).color);
         this.graphics.waterPool[i]?.setAlpha(1);
+        this.graphics.waterPool[i]!.isoZ = (this.heightMap[i] ?? 0) + h;
       }
       else if (this.graphics.waterPool[i] !== undefined) {
         this.graphics.waterPool[i]!.destroy();
@@ -244,4 +252,74 @@ export class BasicScene extends Phaser.Scene {
       }
     });
   }
+
+  // updateGraphics() {
+  //   // heightmap
+  //   this.heightMap.forEach((h, i) => {
+  //     if (this.originalHeightMap[i] != h) {
+  //       if (this.graphics.heightMap[i] !== undefined) {
+  //         // this.graphics.heightMap[i].setZ(h);
+  //         this.graphics.heightMap[i].isoZ = h;
+  //         this.graphics.heightMap[i].setTint(this.getColorFromHeight(h).color);
+  //         this.graphics.heightMap[i]!.setDepth(1);
+  //         this.graphics.heightMap[i]!.setScale(TILE_SIZE / 4);
+  //       }
+  //     }
+  //     try {
+  //       this.graphics.heightMap[i]!.setAlpha(0.5);
+  //     }
+  //     catch{
+  //       console.log(i);
+  //       console.log(this, this.heightMap);
+  //     }
+  //     // this.graphics.heightMap[i].setZ(h);
+  //     this.graphics.heightMap[i].isoZ = h;
+  //   });
+  //   // waterpath
+  //   this.waterPath.forEach((h, i) => {
+  //     if (this.graphics.waterPool[i] !== undefined && (this.graphics.waterPool[i] ?? 0) > 0) {
+  //       // do nothing
+  //     }
+  //     else
+  //       if (this.waterPath[i] > 0 && this.graphics.waterPath[i] === undefined) {
+  //         const x = TILE_SIZE * (i % DIM.x);
+  //         const y = TILE_SIZE * (Math.floor(i / DIM.x));
+  //         this.graphics.waterPath[i] = this.add.isoSprite(x, y, (this.heightMap[i] ?? 0) + 0.1, 'blank');
+  //         this.graphics.waterPath[i]?.setAlpha(h);
+  //         this.graphics.waterPath[i]!.isoZ = (this.heightMap[i] ?? 0) + 0.1;
+  //         this.graphics.waterPath[i]!.setTint(0x0055BB);
+  //         this.graphics.waterPath[i]!.setDepth(2);
+  //         this.graphics.waterPath[i]!.setScale(TILE_SIZE / 4);
+  //       }
+  //       else if (this.waterPath[i] > 0) {
+  //         // this.graphics.waterPath[i]!.setZ((this.heightMap[i] ?? 0) + 0.1);
+  //         this.graphics.waterPath[i]!.isoZ = (this.heightMap[i] ?? 0) + 0.1;
+  //         this.graphics.waterPath[i]?.setAlpha(h);
+  //       }
+  //       else if (this.waterPath[i] <= 0 && this.graphics.waterPath[i] !== undefined) {
+  //         this.graphics.waterPath[i]!.destroy();
+  //         this.graphics.waterPath[i] = undefined;
+  //       }
+  //     this.graphics.heightMap[i]!.setAlpha(0.5);
+  //   });
+  //   // waterpool
+  //   this.waterPool.forEach((h, i) => {
+  //     if (this.waterPool[i] > 0 && this.graphics.waterPool[i] === undefined) {
+  //       const x = TILE_SIZE * (i % DIM.x);
+  //       const y = TILE_SIZE * (Math.floor(i / DIM.x));
+  //       this.graphics.waterPool[i] = this.add.isoSprite(x, y, (this.heightMap[i] ?? 0) + h, 'blank');
+  //       this.graphics.waterPool[i]!.setTint(0x0000BB);
+  //       this.graphics.waterPool[i]!.setDepth(3);
+  //       this.graphics.waterPool[i]!.setScale(TILE_SIZE / 4);
+  //     }
+  //     else if (this.waterPool[i] > 0) {
+  //       // this.graphics.waterPool[i]!.setZ((this.heightMap[i] ?? 0) + h);
+  //       this.graphics.waterPool[i]!.isoZ = (this.heightMap[i] ?? 0) + h;
+  //     }
+  //     else if (this.graphics.waterPool[i] !== undefined) {
+  //       this.graphics.waterPool[i]!.destroy();
+  //       this.graphics.waterPool[i] = undefined;
+  //     }
+  //   });
+  // }
 }

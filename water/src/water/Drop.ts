@@ -67,6 +67,10 @@ export class Drop {
     //   .normalize();
   }
 
+  isOutOfBounds(position: IPosition, dim: IDimensions) {
+    return position.x < 0 || position.y < 0 || position.x > dim.x - 1 || position.y > dim.y - 1;
+  }
+
   descend(heightMap: number[], waterPath: number[], waterPool: number[], track: boolean[], getIndex: (x: number, y: number) => number, dim: IDimensions, scale) {
     // console.log(`I am at ${JSON.stringify(this.position)}, h=${heightMap[getIndex(this.position.x, this.position.y)]} and my volume is ${this.volume}`);
     while (this.volume > this.minVol) {
@@ -97,8 +101,9 @@ export class Drop {
 
       const newIndex = getIndex(this.position.x, this.position.y);
       // bounds check - hardcoded for now
-      if (this.position.x < 0 || this.position.y < 0 || this.position.x > dim.x - 1 || this.position.y > dim.y - 1) {
+      if (this.isOutOfBounds(this.position, dim)) {
         this.volume = 0.0;
+        this.sediment = 0.0;
         // console.log(`EXIT: out of bounds: accel: ${JSON.stringify(acceleration)} (${acceleration.length()})`);
         break;
       }
@@ -106,6 +111,7 @@ export class Drop {
       // has not accelerated
       if (/*waterPath[newIndex] > 0.1 &&*/ acceleration.length() < 0.01) {
         // console.log("EXIT: has not accelerated");
+        this.dropSediment(heightMap, dim, getIndex);
         break;
       }
 
@@ -129,7 +135,9 @@ export class Drop {
     }
     if (this.volume <= this.minVol) {
       // console.log("EXIT: out of volume");
+      this.dropSediment(heightMap, dim, getIndex);
     }
+
   }
 
   flood(heightMap: number[], waterPool: number[], getIndex: (x: number, y: number) => number, dim: IDimensions) {
@@ -285,7 +293,15 @@ export class Drop {
     // Couldn't place the volume (for some reason) so ignore this drop
     if (fail == 0) {
       // console.log("Fail: ignoring drop");
-      this.volume = 0.0;
+      this.dropSediment(heightMap, dim, getIndex);
+    }
+  }
+
+  dropSediment(heightMap: number[], dim: IDimensions, getIndex: (x: number, y: number) => number) {
+    if (this.sediment > 0 && !this.isOutOfBounds(this.position, dim)) {
+      const index = getIndex(this.position.x, this.position.y);
+      heightMap[index] += this.sediment;
+      this.sediment = 0.0;
     }
   }
 }

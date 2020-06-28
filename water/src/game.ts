@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { BasicScene } from "./Scenes/BasicScene";
+import { IsoScene } from "./Scenes/IsoScene";
 
 class Game extends Phaser.Game {
   constructor() {
@@ -12,6 +13,7 @@ class Game extends Phaser.Game {
         default: 'arcade'
       },
       scene: [
+        IsoScene,
         BasicScene
       ]
     });
