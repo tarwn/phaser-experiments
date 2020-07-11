@@ -171,10 +171,6 @@ describe("RiverMapper", () => {
       debugMesh(mesh);
       RiverMapper.calculateRivers(mesh, 1);
 
-      // TODO - how do we drain a pool once it's even w/ a neighbor that could turn into a river?
-      //   in this case, we want to run a river vertical but pull it from the pool as a starting point so there's a connection?
-      //   otherwise the pool connects to the ocean and everything sinks
-
       debugMesh(mesh);
       // fills up both to closest next neighbor due to 2nd humidityIn
       expect(river[0]?.river.pool).toBe(river[2]?.height! - 1);
@@ -182,7 +178,6 @@ describe("RiverMapper", () => {
       expect(river[2]?.river.river?.amount ?? 0).toBeGreaterThan(1);
       expect(river[3]?.river.river?.amount ?? 0).toBeGreaterThan(1);
       expect(river[4]?.river.river?.amount ?? 0).toBeGreaterThan(1);
-      expect(1).toBe(2);
     });
   });
 });

@@ -1,11 +1,13 @@
-import { HexagonMesh, HexagonMeshItem, IHexagonMeshItem, IHexagonMeshNeighbor } from "../../mesh/HexagonMesh";
+import { HexagonMesh, HexagonMeshItem, IHexagonMeshNeighbor } from "../../mesh/HexagonMesh";
 import { MeshType, IAxialPoint } from "../../mesh/types";
-import { Mesh } from "../../mesh/Mesh";
+import { roundTo } from "../hexUtils";
+
+// const debugLoc = { q: 39, r: 57 };
 
 export const RiverMapper = {
   calculateRivers: (mesh: HexagonMesh, waterToHeightRatio: number) => {
     const getTrueHeight = (meshItem: HexagonMeshItem) => {
-      return meshItem.height + (meshItem.river.pool ?? 0) * waterToHeightRatio;
+      return roundTo(meshItem.height + (meshItem.river.pool ?? 0) * waterToHeightRatio, 4);
     };
 
     mesh.apply(m => {
@@ -33,8 +35,6 @@ export const RiverMapper = {
       while (remainingWater > 0 && attempts < 20) {
         attempts++;
 
-        let trigger = false;
-
         // if it's an ocean, we're done?
         if (currentMeshItem.type == MeshType.Ocean) {
           remainingWater = 0;
@@ -43,14 +43,6 @@ export const RiverMapper = {
 
         // if not pool, look for drain
         if (currentMeshItem.river.pool === undefined) {
-          if (currentMeshItem.axial.q == 20 && currentMeshItem.axial.r == 35) {
-            console.log({
-              hasRiver: currentMeshItem.river.river != undefined,
-              river: currentMeshItem.river
-            });
-            trigger = true;
-          }
-
           // already have a river? just fill it in and move on
           if (currentMeshItem.river.river) {
             currentMeshItem.river.river.amount += remainingWater;
@@ -80,18 +72,6 @@ export const RiverMapper = {
             }
             return lowest;
           }, currentMeshItem.rawNeighbors[0]);
-
-          if (currentMeshItem.axial.q == 20 && currentMeshItem.axial.r == 35) {
-            console.log({
-              lowestNeighbor,
-              nIsOcean: (lowestNeighbor.meshItem.type == MeshType.Ocean),
-              nIsDrain: (lowestNeighbor.meshItem.river.pool === undefined && (lowestNeighbor.meshItem.height < currentMeshItem.height)),
-              nIsPool: (lowestNeighbor.meshItem.river.pool !== undefined && (lowestNeighbor.meshItem.height < currentMeshItem.height)),
-              nRiver: lowestNeighbor.meshItem.river.river
-            });
-            trigger = true;
-          }
-
 
           // the river flows into the ocean
           if (lowestNeighbor.meshItem.type == MeshType.Ocean) {
@@ -145,14 +125,6 @@ export const RiverMapper = {
         pathTo.set(lowestNeighbor.meshItem.axial, { meshItem: currentMeshItem, neighbor: lowestNeighbor });
         while (queue.length > 0) {
           const meshItem = queue.shift();
-
-          if (meshItem?.axial.q == 20 && meshItem.axial.r == 35) {
-            console.log({
-              lowestNeighbor: lowestNeighbor.meshItem.axial,
-              queue: [...queue]
-            });
-            trigger = true;
-          }
 
           meshItem?.rawNeighbors.forEach(n => {
             //-- expand the pool
@@ -230,17 +202,6 @@ export const RiverMapper = {
           return path;
         };
 
-
-        if (trigger) {
-          console.log({
-            lowestNeighbor: lowestNeighbor.meshItem.axial,
-            curHeight: getTrueHeight(currentMeshItem),
-            lowestHeight: getTrueHeight(lowestNeighbor.meshItem),
-            path: backtrackPath(lowestNeighbor.meshItem.axial, currentMeshItem.axial),
-          });
-          trigger = false;
-        }
-
         // touched the ocean? drain to 0 + continue
         if (lowestNeighbor.meshItem.type == MeshType.Ocean) {
           //console.log("Flood Drain to ocean");
@@ -277,6 +238,9 @@ export const RiverMapper = {
                 amount: remainingWater
               };
             }
+            if (p.neighbor.meshItem.river.river?.to == p.meshItem) {
+              p.neighbor.meshItem.river.river = undefined;
+            }
           });
           currentMeshItem = lowestNeighbor.meshItem;
           // remainingWater = 0 - leave the remaining water on lowest tile
@@ -298,103 +262,38 @@ export const RiverMapper = {
         // should not be possible - same height should be part of drain above
         throw new Error("Impossible scenario?");
       }
-
-      //             // then pools get replaced by neighbors
-      //             else if(lowestNeighbor.meshItem.river.pool !== undefined || pool.has(lowestNeighbor.meshItem.axial)) {
-      //     lowestNeighbor = n;
-      // lowestNeighborNeighbor = meshItem;
-      //             }
-      //             // if the neighbor is low enough to be flooded by filling the current pool w/ remaining water, add it to the pool
-      //             else if (getTrueHeight(n.meshItem) < getTrueHeight(currentMeshItem) + (remainingWater * waterToHeightRatio) / pool.size) {
-      //   // if it's a drain then treat it as lowest neighbor instead
-      //   if (n.meshItem.river.river)
-
-
-      //     // otherwise add it to the pool
-      //     console.log({
-      //       adding: n.meshItem.axial,
-      //       origHeight: currentMeshItem.height,
-      //       origTrueHeight: getTrueHeight(currentMeshItem),
-      //       thisHeight: meshItem.height,
-      //       thisTrueHeight: getTrueHeight(meshItem)
-      //     });
-      //   if (!pool.has(n.meshItem.axial)) {
-      //     pool.set(n.meshItem.axial, n.meshItem);
-      //     queue.push(n.meshItem);
-      //   }
-      // }
-      // // then lowest actual neighbor that's not in the pool already
-      // else if (!pool.has(n.meshItem.axial) && lowestNeighbor.meshItem.height > getTrueHeight(n.meshItem)) {
-      //   lowestNeighbor = n;
-      //   lowestNeighborNeighbor = meshItem;
-      // }
-      //           });
-      //         }
-
-      // // cheat - just fill in the hole up to the lowest neighbor height, if there's water left over it will drain out
-
-
-      // console.log({
-      //   axial: m.axial,
-      //   i: currentMeshItem.axial,
-      //   ht: currentMeshItem.height,
-      //   remainingWater,
-      //   floodWater,
-      //   poolSize: pool.size,
-      //   lowestNeighborHeight: lowestNeighbor.meshItem.height,
-      //   lowestNeighbor: lowestNeighbor.meshItem.axial
-      // });
-
-      // if (lowestNeighbor === undefined) {
-      //   continue;
-      // }
-      // // if we touched the ocean, this pool now part of it - may want to come back and do something with erosion and islands instead
-      // if (lowestNeighbor.meshItem.type == MeshType.Ocean) {
-      //   pool.forEach(p => {
-      //     p.height = 0;
-      //     p.type = MeshType.Ocean;
-      //     p.river.pool = undefined;
-      //   });
-      //   remainingWater = 0;
-      //   continue;
-      // }
-
-      // // does the lowest neighbor have a lower neighbor? it's a drain, add rivers and make it the selected item
-      // const potentialDrain = lowestNeighbor.meshItem.rawNeighbors.find(n => n.meshItem.height < lowestNeighbor.meshItem.height && n.meshItem.river.pool === undefined);
-      // if (potentialDrain) {
-      //   console.log("drain to new river");
-      //   lowestNeighborNeighbor.river.river = {
-      //     to: lowestNeighbor.meshItem,
-      //     direction: lowestNeighbor.edge.degrees,
-      //     amount: remainingWater
-      //   };
-      //   lowestNeighbor.meshItem.river.river = {
-      //     to: potentialDrain.meshItem,
-      //     direction: potentialDrain.edge.degrees,
-      //     amount: remainingWater
-      //   };
-      //   remainingWater = 0;
-      //   currentMeshItem = potentialDrain.meshItem;
-      //   continue;
-      // }
-
-      // // if we have water left, the lowest neighbor is the next mesh item to flood
-      // currentMeshItem = lowestNeighbor.meshItem;
-      //       }
-      // if (attempts >= 20) {
-      //   console.log(m.axial);
-      //   console.log(currentMeshItem.axial);
-      //   throw new Error("Failed in 20 attempts");
-      // }
-
     });
 
 
     // Pass 2: apply results
     let numChanged = 0;
+    let changed = false;
     mesh.apply(m => {
-      if (m.river.pool !== m.river.sim.prevPool || m.river.river !== m.river.sim.prevRiver)
+      changed = false;
+      // undefined's mismatch
+      if (m.river.pool === undefined && m.river.sim.prevPool !== undefined ||
+        m.river.pool !== undefined && m.river.sim.prevPool === undefined ||
+        m.river.river === undefined && m.river.sim.prevRiver !== undefined ||
+        m.river.river !== undefined && m.river.sim.prevRiver === undefined) {
+        changed = true;
+      }
+
+      // pool mismatch
+      else if (roundTo(m.river.pool ?? 0, 0) !== roundTo(m.river.sim.prevPool ?? 0, 0)) {
+        changed = true;
+      }
+
+      // river amount/direction mismatch
+      else if (m.river.river !== undefined && m.river.sim.prevRiver !== undefined) {
+        if (roundTo(m.river.river.amount, 0) !== roundTo(m.river.sim.prevRiver.amount, 0) ||
+          m.river.river.direction !== m.river.river.direction) {
+          changed = true;
+        }
+      }
+
+      if (changed) {
         numChanged++;
+      }
     });
     return numChanged;
   }

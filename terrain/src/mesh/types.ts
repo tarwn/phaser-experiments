@@ -176,6 +176,7 @@ export interface IMeshItem {
   water: IWaterState;
   weather: IWeatherState;
   humidity: IHumidityState;
+  river: IRiverState;
   type: MeshType;
   rawNeighbors: IMeshNeighbor[];
   points: IVertex[];
@@ -212,3 +213,5 @@ export interface IVoronoiMeshNeighbor extends IMeshNeighbor {
   dir: Direction;
   halfEdge: Voronoi.Halfedge;
 }
+
+

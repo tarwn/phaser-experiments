@@ -12,6 +12,7 @@ import { WindGenerator } from "../generator/weather/wind/WindGenerator";
 import { calculateSlope } from "../generator/heightmap/heightUtil";
 import { HumidityGenerator } from "../generator/weather/humidity/HumidityGenerator";
 import { RiverMapper } from "../generator/river/RiverMapper";
+import { roundTo } from "../generator/hexUtils";
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -53,6 +54,7 @@ export class HybridScene extends Phaser.Scene {
     windmap?: Phaser.GameObjects.Group;
     humidityMap?: Phaser.GameObjects.Group;
     rivers?: Phaser.GameObjects.Group;
+    drainage?: Phaser.GameObjects.Group;
     highlightHex?: Phaser.GameObjects.Polygon;
   };
   hexWidth: number;
@@ -88,7 +90,7 @@ export class HybridScene extends Phaser.Scene {
       .repeat("calculate humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE, PRECIPITATION_SLOPE_MULTIPLIER), 5)
       .until((i, out, last) => i >= 50 || out === 0)
       .repeat("calculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO), 1)
-      .until((i, out, last) => i >= 10 || out === 0)
+      .until((i, out, last) => i >= 5 || out === 0)
       .complete();
 
     this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
@@ -153,7 +155,7 @@ export class HybridScene extends Phaser.Scene {
       case "convert to hexagonal":
         this.redrawHeightMap(1, this.hexMesh || this.mesh);
         // this.redrawMesh(0, this.hexMesh || this.mesh, false);
-        this.redrawMesh(0, this.mesh, true);
+        this.redrawMesh(10, this.mesh, true);
         break;
       case "identify ocean & initialize weather":
         this.redrawCoastline(2);
@@ -168,6 +170,7 @@ export class HybridScene extends Phaser.Scene {
         break;
       case "calculate rivers":
         this.redrawRivers(5);
+        // this.redrawDrainage(7);
         break;
     }
 
@@ -184,6 +187,9 @@ export class HybridScene extends Phaser.Scene {
   }
 
   recalculateSlopes() {
+    this.hexMesh?.apply(m => {
+      m.height = roundTo(m.height, 4);
+    });
     this.hexMesh?.apply(m => {
       m.rawNeighbors.forEach(n => {
         n.edge.slope = calculateSlope(m, n.meshItem, this.pxToKilometers);
@@ -277,12 +283,12 @@ export class HybridScene extends Phaser.Scene {
     mesh.apply(m => {
       // the filter is so we only draw connections once, not once from each side (double draw)
       m.rawNeighbors.filter(n => n.site.x > m.site.x || (m.site.x == n.site.x && n.site.y > m.site.y)).forEach(n => {
-        lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
-          .setDepth(depth)
-          .setOrigin(0, 0));
-        // lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x + (m.site.x - n.site.x) / 2, n.site.y + (m.site.y - n.site.y) / 2, 0x333333, 0.1)
+        // lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0x666633, 0.1)
         //   .setDepth(depth)
         //   .setOrigin(0, 0));
+        lines.push(this.add.line(0, 0, m.site.x, m.site.y, n.site.x, n.site.y, 0xCCCC77, 0.025)
+          .setDepth(depth)
+          .setOrigin(0, 0));
       });
     });
     return lines;
@@ -500,38 +506,66 @@ export class HybridScene extends Phaser.Scene {
   }
   drawRivers(depth: number, mesh: HexagonMesh) {
     const polygons = new Phaser.GameObjects.Group(this);
+    // const hasDrawnRiver = new Map<IAxialPoint, boolean>();
     mesh.apply(m => {
       if ((m.river.pool ?? 0) > 0) {
         const color = this.getHeightMapColor(-1 * (m.river.pool ?? 0) * WATER_TO_HEIGHT_RATIO);
-        const lake = this.add.polygon(0, 0, m.points, color.color, color.alpha)
+        const lake = this.add.polygon(0, 0, m.points, color.color, 0.9)
           .setOrigin(0, 0)
           .setDepth(depth);
         polygons.add(lake);
       }
 
-      if (m.river.river !== undefined) {
+      if (m.river.river !== undefined && m.river.river.amount >= 1 &&
+        (m.river.pool === undefined || m.river.river.to.river.pool === undefined)) {
         // const amount = Math.min(m.river.river.amount / 2, 10);
-        // const distance = Phaser.Math.Distance.Between(m.site.x, m.site.y, m.river.river.to.site.x, m.river.river.to.site.y);
-        // const points = [
-        //   -1 * amount / 2, 0,
-        //   1 * amount / 2, 0,
-        //   1 * amount / 2, distance,
-        //   -1 * amount / 2, distance
-        // ];
-        // const river = this.add.polygon(m.site.x, m.site.y, points, 0xff00ff, .75)
-        //   .setOrigin(0, 0)
-        //   .setDepth(depth)
-        //   .setRotation(Phaser.Math.DegToRad(m.river.river.direction + 90));
-        // polygons.add(river);
-
+        let distance = Phaser.Math.Distance.Between(m.site.x, m.site.y, m.river.river.to.site.x, m.river.river.to.site.y);
+        let start = 0;
+        if (m.river.pool !== undefined) {
+          start = distance / 2;
+        }
+        else if (m.river.river.to.river.pool !== undefined) {
+          distance = distance / 2;
+        }
+        let width = 2;
+        if (m.river.river.amount < 4) {
+          width = 1;
+        }
         const points = [
-          { x: 10, y: 0 },
-          { x: 7, y: 3 },
-          { x: 7, y: 1 },
+          start, -1 * width / 2,
+          distance, -1 * width / 2,
+          distance, 1 * width / 2,
+          start, 1 * width / 2
+        ];
+        const color = this.getHeightMapColor(-1 * (m.river.river.amount ?? 0) * WATER_TO_HEIGHT_RATIO / 2);
+        const river = this.add.polygon(m.site.x, m.site.y, points, color.color, 0.9)
+          .setOrigin(0, 0)
+          .setDepth(depth)
+          .setRotation(Phaser.Math.DegToRad(m.river.river.direction));
+        polygons.add(river);
+      }
+
+    });
+    return polygons;
+  }
+  redrawDrainage(depth: number) {
+    if (this.graphics.drainage) {
+      this.graphics.drainage.clear(true, true);
+    }
+    this.graphics.drainage = this.drawDrainage(depth, this.hexMesh!);
+  }
+  drawDrainage(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    mesh.apply(m => {
+      if (m.river.river !== undefined) {
+        const points = [
+          { x: 8, y: 0 },
+          { x: 5, y: 3 },
+          { x: 5, y: 1 },
           { x: 0, y: 1 },
           { x: 0, y: -1 },
-          { x: 7, y: -1 },
-          { x: 7, y: -3 }
+          { x: 5, y: -1 },
+          { x: 5, y: -3 }
         ];
         const river = this.add.polygon(m.site.x, m.site.y, points, 0xff00ff, 0.9)
           .setOrigin(0, 0)
@@ -539,7 +573,6 @@ export class HybridScene extends Phaser.Scene {
           .setRotation(Phaser.Math.DegToRad(m.river.river.direction));
         polygons.add(river);
       }
-
     });
     return polygons;
   }
