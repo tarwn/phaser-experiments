@@ -2,7 +2,7 @@ import { HexagonMesh } from "../../../mesh/HexagonMesh";
 import { MeshType } from "../../../mesh/types";
 
 export const HumidityGenerator = {
-  calculateHumidity: (mesh: HexagonMesh, evaporationRate: number, transpirationRate: number, precipitationLossRate: number) => {
+  calculateHumidity: (mesh: HexagonMesh, evaporationRate: number, transpirationRate: number, precipitationLossRate: number, slopeMultiplier: number) => {
     // Pass 1: gain humidity from sources
     mesh.apply(m => {
       m.humidity.sim.humidityIn = 0;
@@ -26,7 +26,7 @@ export const HumidityGenerator = {
       let loss = precipitationLossRate;
       m.rawNeighbors.forEach(n => {
         if (n.edge.slope !== undefined && n.edge.slope > 0) {
-          loss += precipitationLossRate * 7 * n.edge.slope;
+          loss += precipitationLossRate * slopeMultiplier * n.edge.slope;
         }
       });
 

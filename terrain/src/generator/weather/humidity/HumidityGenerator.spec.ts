@@ -35,7 +35,7 @@ describe("HumidityGenerator", () => {
         m.water.state = 1;
         m.type = MeshType.Ocean;
       });
-      HumidityGenerator.calculateHumidity(mesh, .5, 0, 0);
+      HumidityGenerator.calculateHumidity(mesh, .5, 0, 0, 5);
 
       expect(mesh.meshItems[0].humidity.sim.humidityIn).toBe(0.5);
       expect(mesh.meshItems[0].humidity.sim.humidityOut).toBe(0);
@@ -47,7 +47,7 @@ describe("HumidityGenerator", () => {
         m.water.state = 0;
         m.type = MeshType.Land;
       });
-      HumidityGenerator.calculateHumidity(mesh, 0, .5, 0);
+      HumidityGenerator.calculateHumidity(mesh, 0, .5, 0, 5);
 
       expect(mesh.meshItems[0].humidity.sim.humidityIn).toBe(0.5);
       expect(mesh.meshItems[0].humidity.sim.humidityOut).toBe(0);
@@ -59,7 +59,7 @@ describe("HumidityGenerator", () => {
         m.water.state = 1;
         m.type = MeshType.Ocean;
       });
-      HumidityGenerator.calculateHumidity(mesh, 1, 0, 0.5);
+      HumidityGenerator.calculateHumidity(mesh, 1, 0, 0.5, 5);
 
       expect(mesh.meshItems[0].humidity.sim.humidityIn).toBe(1);
       expect(mesh.meshItems[0].humidity.sim.humidityOut).toBe(0.5);

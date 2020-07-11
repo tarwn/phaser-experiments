@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { combineWind } from "../generator/weather/windUtil";
+import { combineWind } from "../generator/weather/wind/windUtil";
 
 export enum Direction {
   Left,
@@ -25,6 +25,16 @@ export interface IWaterState {
     waterIn: number;
     dirtIn: number;
     dirtOut: number;
+  }
+}
+
+export interface IRiverState {
+  river?: { to: IMeshItem; direction: number; amount: number; };
+  pool?: number;
+  sim: {
+    waterIn: number;
+    prevRiver?: { to: IMeshItem; direction: number; amount: number; };
+    prevPool?: number;
   }
 }
 

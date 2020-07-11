@@ -1,6 +1,6 @@
 // import * as Phaser from "phaser";
-import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IWeatherState, IWaterState, IHumidityState } from "./types";
-import { getEmptyWeather, getEmptyWater, getEmptyHumidity } from "./Mesh";
+import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IWeatherState, IWaterState, IHumidityState, IRiverState } from "./types";
+import { getEmptyWeather, getEmptyWater, getEmptyHumidity, getEmptyRiver } from "./Mesh";
 import { calculateSlope } from "../generator/heightmap/heightUtil";
 
 export interface IHexagonMeshItem extends IMeshItem {
@@ -14,7 +14,7 @@ export interface IHexagonMeshItem extends IMeshItem {
 }
 
 
-interface IHexagonMeshNeighbor extends IMeshNeighbor {
+export interface IHexagonMeshNeighbor extends IMeshNeighbor {
   meshItem: HexagonMeshItem;
   edge: IHexagonEdge;
 }
@@ -38,6 +38,7 @@ export class HexagonMeshItem implements IHexagonMeshItem {
   water: IWaterState;
   weather: IWeatherState;
   humidity: IHumidityState;
+  river: IRiverState;
   type: MeshType;
 
   constructor(axial: IAxialPoint, site: IPixelPoint, isMapEdge: boolean, height: number, type: MeshType, points: IVertex[]) {
@@ -50,6 +51,7 @@ export class HexagonMeshItem implements IHexagonMeshItem {
     this.water = getEmptyWater();
     this.weather = getEmptyWeather();
     this.humidity = getEmptyHumidity();
+    this.river = getEmptyRiver();
     this.rawNeighbors = new Array<IHexagonMeshNeighbor>();
   }
 
@@ -121,7 +123,7 @@ export class HexagonMesh implements IMesh {
   }
 
   xToQ(x: number, r: number) {
-    return ((x - (r % 2 == 0 ? 0 : this._d.halfHexWidth)) / this.hexWidth) - Math.floor(r / 2);
+    return Math.round(((x - (r % 2 == 0 ? 0 : this._d.halfHexWidth)) / this.hexWidth) - Math.floor(r / 2));
   }
 
   rToY(r: number) {
@@ -129,7 +131,7 @@ export class HexagonMesh implements IMesh {
   }
 
   yToR(y: number) {
-    return (y - this._d.quarterHexHeight) / this._d.threeQuarterHexHeight;
+    return Math.round((y - this._d.quarterHexHeight) / this._d.threeQuarterHexHeight);
   }
 
   private createMeshItems(hexWidth: number, hexHeight: number, width: number, height: number) {

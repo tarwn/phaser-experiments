@@ -1,6 +1,6 @@
 import { calculateWindOutput, calculateNeighborStrengths, WindGenerator, applyInitialWind } from "./WindGenerator";
-import { MeshType, IWindMeasure } from "../../mesh/types";
-import { HexagonMesh, HexagonMeshItem } from "../../mesh/HexagonMesh";
+import { MeshType, IWindMeasure } from "../../../mesh/types";
+import { HexagonMesh, HexagonMeshItem } from "../../../mesh/HexagonMesh";
 
 const getSampleMeshItem = (overrides?: any): HexagonMeshItem => {
   const item = new HexagonMeshItem(

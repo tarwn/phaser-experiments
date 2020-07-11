@@ -5,12 +5,12 @@
 //  2. Wind speeds up when going downhill
 //  3. Wind turns when met with an obstruction
 import * as Phaser from "phaser";
-import { IWindMeasure, MeshType, DirectionalIO, IAxialPoint } from "../../mesh/types";
-import { HexagonMesh, HexagonMeshItem } from "../../mesh/HexagonMesh";
-import { getNextHighestEvenEdge, getNextLowestEvenEdge } from "../hexUtils";
+import { IWindMeasure, MeshType, DirectionalIO, IAxialPoint } from "../../../mesh/types";
+import { HexagonMesh, HexagonMeshItem } from "../../../mesh/HexagonMesh";
+import { getNextHighestEvenEdge, getNextLowestEvenEdge } from "../../hexUtils";
 import { debugMesh, debugMeshOutput } from "./WindGenerator.spec";
 import { combineWind } from "./windUtil";
-import { getUsableHeight, inverseSlope } from "../heightmap/heightUtil";
+import { getUsableHeight, inverseSlope } from "../../heightmap/heightUtil";
 
 export enum Compass {
   North,

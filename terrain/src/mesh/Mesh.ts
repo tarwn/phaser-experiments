@@ -1,5 +1,5 @@
 import Voronoi from "voronoi";
-import { IMeshItem, Direction, MeshType, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh, DirectionalIO, IWindMeasure, IWeatherState, IWaterState, IAxialPoint, IHumidityState } from "./types";
+import { IMeshItem, Direction, MeshType, IVoronoiMeshItem, IVoronoiMeshNeighbor, IMesh, DirectionalIO, IWindMeasure, IWeatherState, IWaterState, IAxialPoint, IHumidityState, IRiverState } from "./types";
 
 export const createVoronoi = (siteCount: number, width: number, height: number, rng: seedrandom.prng): Voronoi.VoronoiDiagram => {
   const voronoi = new Voronoi();
@@ -57,6 +57,15 @@ export const getEmptyHumidity = (): IHumidityState => {
   };
 };
 
+export const getEmptyRiver = (): IRiverState => {
+  return {
+    pool: undefined,
+    sim: {
+      waterIn: 0,
+      prevPool: undefined
+    }
+  };
+};
 
 // voronoi - refactor below
 
@@ -82,6 +91,8 @@ const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
       height: 0,
       water: getEmptyWater(),
       weather: getEmptyWeather(),
+      humidity: getEmptyHumidity(),
+      river: getEmptyRiver(),
       type: MeshType.Land
     };
     return newItem;

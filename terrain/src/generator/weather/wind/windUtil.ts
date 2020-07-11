@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { IWindMeasure } from "../../mesh/types";
+import { IWindMeasure } from "../../../mesh/types";
 
 export const combineWind = (wind: IWindMeasure[]): IWindMeasure => {
   const result = wind.reduce((v, w) => {

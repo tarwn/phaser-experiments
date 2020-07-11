@@ -1,16 +1,17 @@
 import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { MeshType, IMesh, IWindMeasure, IHumidityState } from "../mesh/types";
+import { MeshType, IMesh, IWindMeasure, IHumidityState, IAxialPoint } from "../mesh/types";
 import { createVoronoi, Mesh, getEmptyWeather } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
 import { HexagonMesh } from "../mesh/HexagonMesh";
-import { WindGenerator } from "../generator/weather/WindGenerator";
+import { WindGenerator } from "../generator/weather/wind/WindGenerator";
 import { calculateSlope } from "../generator/heightmap/heightUtil";
 import { HumidityGenerator } from "../generator/weather/humidity/HumidityGenerator";
+import { RiverMapper } from "../generator/river/RiverMapper";
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -28,6 +29,8 @@ const INITIAL_WIND_DIR = 0;
 const EVAPORATION_RATE = 0.50;
 const TRANSPIRATION_RATE = 0.01;
 const PRECIPITATION_RATE = 0.025;
+const PRECIPITATION_SLOPE_MULTIPLIER = 8; // magic number for more rain going uphill
+const WATER_TO_HEIGHT_RATIO = 10;  // units of water to meters in height
 
 export class HybridScene extends Phaser.Scene {
   width: number;
@@ -49,6 +52,8 @@ export class HybridScene extends Phaser.Scene {
     coastline?: Phaser.GameObjects.Group;
     windmap?: Phaser.GameObjects.Group;
     humidityMap?: Phaser.GameObjects.Group;
+    rivers?: Phaser.GameObjects.Group;
+    highlightHex?: Phaser.GameObjects.Polygon;
   };
   hexWidth: number;
   hexHeight: number;
@@ -80,16 +85,49 @@ export class HybridScene extends Phaser.Scene {
       .queue("recalculate slopes", () => this.recalculateSlopes())
       .queue("identify ocean & initialize weather", () => this.assignMeshType())
       .queue("calculate initial winds", () => WindGenerator.calculateWindEffect(this.hexMesh as HexagonMesh, this.initialWind))
-      .repeat("calculate humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE), 5)
+      .repeat("calculate humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE, PRECIPITATION_SLOPE_MULTIPLIER), 5)
       .until((i, out, last) => i >= 50 || out === 0)
+      .repeat("calculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO), 1)
+      .until((i, out, last) => i >= 10 || out === 0)
       .complete();
 
     this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
+    this.input.on('pointerdown', () => {
+      if (this.hexMesh) {
+        const { x, y } = this.game.input.mousePointer;
+        const r = this.hexMesh.yToR(y);
+        const q = this.hexMesh.xToQ(x, r);
+        const hex = this.hexMesh.axialGet(q, r);
+        console.log({
+          axial: hex?.axial,
+          river: hex?.river.river,
+          height: hex?.height,
+          pool: hex?.river.pool,
+          hex
+        });
+      }
+    });
   }
 
   update() {
     if (this.simulation.canRun()) {
       this.simulation.startOneStep();
+    }
+
+    if (this.hexMesh) {
+      const { x, y } = this.game.input.mousePointer;
+      const r = this.hexMesh.yToR(y);
+      const q = this.hexMesh.xToQ(x, r);
+      const hex = this.hexMesh.axialGet(q, r);
+      if (hex) {
+        if (this.graphics.highlightHex) {
+          this.graphics.highlightHex.destroy();
+        }
+        this.graphics.highlightHex = this.add.polygon(0, 0, hex.points, 0xffffff, 0)
+          .setDepth(10)
+          .setOrigin(0, 0)
+          .setStrokeStyle(1, 0xffffff);
+      }
     }
   }
 
@@ -121,15 +159,21 @@ export class HybridScene extends Phaser.Scene {
         this.redrawCoastline(2);
         break;
       case "calculate initial winds":
-        this.redrawWindMap(3);
+        //this.redrawWindMap(3);
         break;
       case "calculate humidity & precipitation":
         if (args.attemptNumber % 5 == 0) {
-          this.redrawHumidity(4);
+          //this.redrawHumidity(4);
         }
         break;
+      case "calculate rivers":
+        this.redrawRivers(5);
+        break;
     }
+
+
   }
+
 
   initializeState() {
     console.log(`Creating voronoi: seed "${this.seed}"`);
@@ -148,13 +192,33 @@ export class HybridScene extends Phaser.Scene {
   }
 
   assignMeshType() {
-    this.hexMesh?.apply(m => {
-      if (m.height < 0) {
-        m.type = MeshType.Ocean;
-        m.water.state = 1;
+    const queue = [this.hexMesh?.axialGet(0, 0)!];
+    const seen = new Set<IAxialPoint>();
+    seen.add(queue[0].axial);
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      if (item.height < 0) {
+        item.type = MeshType.Ocean;
+        item.water.state = 1;
+        // set river pool?
+        item.rawNeighbors.forEach(n => {
+          if (!seen.has(n.meshItem.axial)) {
+            seen.add(n.meshItem.axial);
+            queue.push(n.meshItem);
+          }
+        });
       }
-      else {
-        m.water.state = 0;
+    }
+    this.hexMesh?.apply(m => {
+      if (m.water.state != 1) {
+        m.type = MeshType.Land;
+        if (m.height < 0) {
+          m.river.pool = (-1 * m.height) / WATER_TO_HEIGHT_RATIO;
+          m.water.state = 1;
+        }
+        else {
+          m.water.state = 0;
+        }
       }
       m.weather = getEmptyWeather();
     });
@@ -424,6 +488,58 @@ export class HybridScene extends Phaser.Scene {
         // }
 
       }
+    });
+    return polygons;
+  }
+
+  redrawRivers(depth: number) {
+    if (this.graphics.rivers) {
+      this.graphics.rivers.clear(true, true);
+    }
+    this.graphics.rivers = this.drawRivers(depth, this.hexMesh!);
+  }
+  drawRivers(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    mesh.apply(m => {
+      if ((m.river.pool ?? 0) > 0) {
+        const color = this.getHeightMapColor(-1 * (m.river.pool ?? 0) * WATER_TO_HEIGHT_RATIO);
+        const lake = this.add.polygon(0, 0, m.points, color.color, color.alpha)
+          .setOrigin(0, 0)
+          .setDepth(depth);
+        polygons.add(lake);
+      }
+
+      if (m.river.river !== undefined) {
+        // const amount = Math.min(m.river.river.amount / 2, 10);
+        // const distance = Phaser.Math.Distance.Between(m.site.x, m.site.y, m.river.river.to.site.x, m.river.river.to.site.y);
+        // const points = [
+        //   -1 * amount / 2, 0,
+        //   1 * amount / 2, 0,
+        //   1 * amount / 2, distance,
+        //   -1 * amount / 2, distance
+        // ];
+        // const river = this.add.polygon(m.site.x, m.site.y, points, 0xff00ff, .75)
+        //   .setOrigin(0, 0)
+        //   .setDepth(depth)
+        //   .setRotation(Phaser.Math.DegToRad(m.river.river.direction + 90));
+        // polygons.add(river);
+
+        const points = [
+          { x: 10, y: 0 },
+          { x: 7, y: 3 },
+          { x: 7, y: 1 },
+          { x: 0, y: 1 },
+          { x: 0, y: -1 },
+          { x: 7, y: -1 },
+          { x: 7, y: -3 }
+        ];
+        const river = this.add.polygon(m.site.x, m.site.y, points, 0xff00ff, 0.9)
+          .setOrigin(0, 0)
+          .setDepth(depth + 1)
+          .setRotation(Phaser.Math.DegToRad(m.river.river.direction));
+        polygons.add(river);
+      }
+
     });
     return polygons;
   }
