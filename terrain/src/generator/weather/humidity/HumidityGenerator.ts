@@ -9,7 +9,7 @@ export const HumidityGenerator = {
       m.humidity.sim.humidityOut = 0;
 
       // evaporation - not actually removing water, just simulating part of the cycle
-      if (m.water.state > 0) {
+      if (m.water.state > 0 || m.river.pool !== undefined) {
         m.humidity.sim.humidityIn += evaporationRate;
       }
       // transpiration - temporary

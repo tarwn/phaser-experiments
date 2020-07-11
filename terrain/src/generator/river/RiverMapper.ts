@@ -75,26 +75,26 @@ export const RiverMapper = {
 
           // the river flows into the ocean
           if (lowestNeighbor.meshItem.type == MeshType.Ocean) {
-            lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
+            // lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
             currentMeshItem.river.river = {
               to: lowestNeighbor.meshItem,
               direction: lowestNeighbor.edge.degrees,
               amount: remainingWater
             };
-            m.river.sim.waterIn = 0;
+            // m.river.sim.waterIn = 0;
             currentMeshItem = lowestNeighbor.meshItem;
             remainingWater = 0;
             continue;
           }
           // the river drains
           if (lowestNeighbor.meshItem.river.pool === undefined && (lowestNeighbor.meshItem.height < currentMeshItem.height)) {
-            lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
+            // lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
             currentMeshItem.river.river = {
               to: lowestNeighbor.meshItem,
               direction: lowestNeighbor.edge.degrees,
               amount: remainingWater
             };
-            m.river.sim.waterIn = 0;
+            // m.river.sim.waterIn = 0;
             // TODO - why are some rivers dead-ending?
             //remainingWater = 0;
             currentMeshItem = lowestNeighbor.meshItem;
@@ -103,7 +103,7 @@ export const RiverMapper = {
 
           // drain to a pool
           if (lowestNeighbor.meshItem.river.pool !== undefined && (lowestNeighbor.meshItem.height < currentMeshItem.height)) {
-            lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
+            // lowestNeighbor.meshItem.river.sim.waterIn += remainingWater;
             currentMeshItem.river.river = {
               to: lowestNeighbor.meshItem,
               direction: lowestNeighbor.edge.degrees,

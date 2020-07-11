@@ -1,7 +1,7 @@
 import * as Phaser from "phaser";
 import Voronoi from "voronoi";
 import seedrandom = require("seedrandom");
-import { MeshType, IMesh, IWindMeasure, IHumidityState, IAxialPoint } from "../mesh/types";
+import { MeshType, IMesh, IWindMeasure, IHumidityState, IAxialPoint, BiomeClassification } from "../mesh/types";
 import { createVoronoi, Mesh, getEmptyWeather } from "../mesh/Mesh";
 import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
@@ -13,6 +13,8 @@ import { calculateSlope } from "../generator/heightmap/heightUtil";
 import { HumidityGenerator } from "../generator/weather/humidity/HumidityGenerator";
 import { RiverMapper } from "../generator/river/RiverMapper";
 import { roundTo } from "../generator/hexUtils";
+import { BiomeAssigner } from "../generator/biome/BiomeAssigner";
+import { mapBiomeToColor } from "../generator/biome/Maps";
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -32,6 +34,7 @@ const TRANSPIRATION_RATE = 0.01;
 const PRECIPITATION_RATE = 0.025;
 const PRECIPITATION_SLOPE_MULTIPLIER = 8; // magic number for more rain going uphill
 const WATER_TO_HEIGHT_RATIO = 10;  // units of water to meters in height
+const TEMP_AT_SEALEVEL = 18;
 
 export class HybridScene extends Phaser.Scene {
   width: number;
@@ -55,6 +58,7 @@ export class HybridScene extends Phaser.Scene {
     humidityMap?: Phaser.GameObjects.Group;
     rivers?: Phaser.GameObjects.Group;
     drainage?: Phaser.GameObjects.Group;
+    biome?: Phaser.GameObjects.Group;
     highlightHex?: Phaser.GameObjects.Polygon;
   };
   hexWidth: number;
@@ -91,6 +95,9 @@ export class HybridScene extends Phaser.Scene {
       .until((i, out, last) => i >= 50 || out === 0)
       .repeat("calculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO), 1)
       .until((i, out, last) => i >= 5 || out === 0)
+      .repeat("calculate addtl humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE, PRECIPITATION_SLOPE_MULTIPLIER), 5)
+      .until((i, out, last) => i >= 20 || out === 0)
+      .queue("calculate biomes", () => BiomeAssigner.assignBiomes(this.hexMesh!, TEMP_AT_SEALEVEL))
       .complete();
 
     this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
@@ -105,6 +112,8 @@ export class HybridScene extends Phaser.Scene {
           river: hex?.river.river,
           height: hex?.height,
           pool: hex?.river.pool,
+          biome: hex?.biome,
+          biomeC: BiomeClassification[hex?.biome?.classification ?? 0],
           hex
         });
       }
@@ -164,13 +173,19 @@ export class HybridScene extends Phaser.Scene {
         //this.redrawWindMap(3);
         break;
       case "calculate humidity & precipitation":
+      case "calculate addtl humidity & precipitation":
         if (args.attemptNumber % 5 == 0) {
-          //this.redrawHumidity(4);
+          //this.redrawHumidity(8);
         }
         break;
       case "calculate rivers":
         this.redrawRivers(5);
         // this.redrawDrainage(7);
+        break;
+      case "calculate biomes":
+        // this.redrawBiomeHumidity(7);
+        //this.redrawBiomePrecipitation(7);
+        this.redrawBiomeClassifications(1);
         break;
     }
 
@@ -576,4 +591,96 @@ export class HybridScene extends Phaser.Scene {
     });
     return polygons;
   }
+
+
+  redrawBiomeHumidity(depth: number) {
+    if (this.graphics.biome) {
+      this.graphics.biome.clear(true, true);
+    }
+    this.graphics.biome = this.drawBiomeHumidity(depth, this.hexMesh!);
+  }
+  drawBiomeHumidity(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    const textStyle = {
+      fontFamily: "Arial",
+      fontSize: 8,
+      color: "red"
+    };
+    mesh.apply(m => {
+      if (m.biome) {
+        const color = m.biome.humidity <= 1
+          ? Phaser.Display.Color.HSLToColor(0.8, 100, 1 - .5 * m.biome.humidity)
+          : Phaser.Display.Color.HSLToColor(.1, 100, .5);
+        const p = this.add.polygon(0, 0, m.points, color.color, 0.75)
+          .setOrigin(0, 0)
+          .setDepth(depth);
+        polygons.add(p);
+
+        if (m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
+          const text = this.add.text(m.site.x - 3.5, m.site.y - 4, Math.round(m.humidity.state * 100).toString(), textStyle)
+            .setOrigin(0, 0)
+            .setDepth(depth + 1)
+            .setAlpha(1);
+          polygons.add(text);
+        }
+      }
+    });
+    return polygons;
+  }
+
+  redrawBiomePrecipitation(depth: number) {
+    if (this.graphics.biome) {
+      this.graphics.biome.clear(true, true);
+    }
+    this.graphics.biome = this.drawBiomePrecipitation(depth, this.hexMesh!);
+  }
+  drawBiomePrecipitation(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    const textStyle = {
+      fontFamily: "Arial",
+      fontSize: 8,
+      color: "red"
+    };
+    mesh.apply(m => {
+      if (m.biome) {
+        const color = m.river.sim.waterIn < 0
+          ? Phaser.Display.Color.HSLToColor(0.8, 100, 1 - .5 * m.river.sim.waterIn)
+          : Phaser.Display.Color.HSLToColor(.1, 100, .5);
+        const p = this.add.polygon(0, 0, m.points, color.color, 0.75)
+          .setOrigin(0, 0)
+          .setDepth(depth);
+        polygons.add(p);
+
+        if (m.axial.q % 3 == 0 && m.axial.r % 3 == 0) {
+          const text = this.add.text(m.site.x - 3.5, m.site.y - 4, Math.round(m.river.sim.waterIn * 100).toString(), textStyle)
+            .setOrigin(0, 0)
+            .setDepth(depth + 1)
+            .setAlpha(1);
+          polygons.add(text);
+        }
+      }
+    });
+    return polygons;
+  }
+
+  redrawBiomeClassifications(depth: number) {
+    if (this.graphics.biome) {
+      this.graphics.biome.clear(true, true);
+    }
+    this.graphics.biome = this.drawBiomeClassifications(depth, this.hexMesh!);
+  }
+  drawBiomeClassifications(depth: number, mesh: HexagonMesh) {
+    const polygons = new Phaser.GameObjects.Group(this);
+    mesh.apply(m => {
+      if (m.biome && m.river.pool === undefined && m.type !== MeshType.Ocean) {
+        const color = Phaser.Display.Color.ValueToColor(mapBiomeToColor(m.biome.classification));
+        const p = this.add.polygon(0, 0, m.points, color.color, 0.75)
+          .setOrigin(0, 0)
+          .setDepth(depth);
+        polygons.add(p);
+      }
+    });
+    return polygons;
+  }
+
 }

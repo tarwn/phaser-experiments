@@ -1,5 +1,5 @@
 // import * as Phaser from "phaser";
-import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IWeatherState, IWaterState, IHumidityState, IRiverState } from "./types";
+import { MeshType, IMeshItem, IMesh, IMeshNeighbor, IVertex, IAxialPoint, IPixelPoint, IWeatherState, IWaterState, IHumidityState, IRiverState, IBiomeState } from "./types";
 import { getEmptyWeather, getEmptyWater, getEmptyHumidity, getEmptyRiver } from "./Mesh";
 import { calculateSlope } from "../generator/heightmap/heightUtil";
 
@@ -39,6 +39,7 @@ export class HexagonMeshItem implements IHexagonMeshItem {
   weather: IWeatherState;
   humidity: IHumidityState;
   river: IRiverState;
+  biome?: IBiomeState;
   type: MeshType;
 
   constructor(axial: IAxialPoint, site: IPixelPoint, isMapEdge: boolean, height: number, type: MeshType, points: IVertex[]) {

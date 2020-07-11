@@ -46,6 +46,80 @@ export interface IHumidityState {
   };
 }
 
+export interface IBiomeState {
+  temperature: number;
+  humidity: number;
+  precipitation: number;
+  aridity: Aridity;
+  classification: BiomeClassification;
+}
+
+export enum BiomeClassification {
+  Unknown,
+  PolarIce,
+  MiscAridDesert,
+
+  PolarDesert,
+  SubpolarDryTundra,
+  SubpolarMoistTundra,
+  SubpolarWetTundra,
+  SubpolarRainTundra,
+  BorealDesert,
+  BorealDryScrub,
+  BorealMoistForest,
+  BorealWetForest,
+  BorealRainForest,
+  CoolTemperateDesert,
+  CoolTemperateDesertScrub,
+  CoolTemperateSteppe,
+  CoolTemperateMoistForest,
+  CoolTemperateWetForest,
+  CoolTemperateRainForest,
+  WarmTemperateDesert,
+  WarmTemperateDesertScrub,
+  WarmTemperateThornScrub,
+  WarmTemperateDryForest,
+  WarmTemperateMoistForest,
+  WarmTemperateWetForest,
+  WarmTemperateRainForest,
+  SubtropicalDesert,
+  SubtropicalDesertScrub,
+  SubtropicalThornWoodland,
+  SubtropicalDryForest,
+  SubtropicalMoistForest,
+  SubtropicalWetForest,
+  SubtropicalRainForest,
+  TropicalDesert,
+  TropicalDesertScrub,
+  TropicalThornWoodland,
+  TropicalVeryDryForest,
+  TropicalDryForest,
+  TropicalMoistForest,
+  TropicalWetForest,
+  TropicalRainForest
+};
+
+export enum Aridity {
+  SuperHumid,
+  PerHumid,
+  Humid,
+  SubHumid,
+  SemiArid,
+  Arid,
+  PerArid,
+  SuperArid
+}
+
+export enum LatitudinalRegion {
+  Polar,
+  SubPolar,
+  Boreal,
+  CoolTemperate,
+  WarmTemperate,
+  SubTropical,
+  Tropical
+}
+
 // export interface IInput {
 //   wind: DirectionalIO<IWindMeasure>;
 //   water: number;
@@ -177,6 +251,7 @@ export interface IMeshItem {
   weather: IWeatherState;
   humidity: IHumidityState;
   river: IRiverState;
+  biome?: IBiomeState;
   type: MeshType;
   rawNeighbors: IMeshNeighbor[];
   points: IVertex[];

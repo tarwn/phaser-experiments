@@ -93,6 +93,7 @@ const createMesh = (voronoi: Voronoi.VoronoiDiagram): IVoronoiMeshItem[] => {
       weather: getEmptyWeather(),
       humidity: getEmptyHumidity(),
       river: getEmptyRiver(),
+      biome: undefined,
       type: MeshType.Land
     };
     return newItem;
