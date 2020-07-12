@@ -42,6 +42,7 @@ export class HexagonMeshItem implements IHexagonMeshItem {
   biome?: IBiomeState;
   type: MeshType;
 
+
   constructor(axial: IAxialPoint, site: IPixelPoint, isMapEdge: boolean, height: number, type: MeshType, points: IVertex[]) {
     this.axial = axial;
     this.site = site;
@@ -81,6 +82,8 @@ export class HexagonMeshItem implements IHexagonMeshItem {
 export class HexagonMesh implements IMesh {
   hexWidth: number;
   hexHeight: number;
+  width: number;
+  height: number;
   meshItems!: HexagonMeshItem[];
   axialItems!: HexagonMeshItem[][];
   axialColumnCount!: number;
@@ -103,6 +106,8 @@ export class HexagonMesh implements IMesh {
   constructor(hexWidth: number, hexHeight: number, width: number, height: number, pxToKilometer: number) {
     this.hexWidth = hexWidth;
     this.hexHeight = hexHeight;
+    this.width = width;
+    this.height = height;
     this.pxToKilometer = pxToKilometer;
     this.edges = {
       north: [] as HexagonMeshItem[],

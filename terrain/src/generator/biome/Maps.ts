@@ -8,6 +8,9 @@ export const mapBiome = (temperature: number, aridity: Aridity) => {
     else if (temperature > 0 && aridity >= Aridity.SemiArid) {
       return BiomeClassification.MiscAridDesert;
     }
+    else if (temperature > 0 && temperature < 3 && aridity < Aridity.SemiArid) {
+      return BiomeClassification.PolarDesert;
+    }
     else {
       return BiomeClassification.Unknown;
     }
