@@ -20,13 +20,13 @@ describe("HumidityGenerator", () => {
   describe("calculateHumidity", () => {
     const hexHeight = 8;
     const hexWidth = 7;
-    const mesh = new HexagonMesh(hexWidth, hexHeight, 50, 50, 1);
+    const mesh = new HexagonMesh(hexWidth, hexHeight, 50, 50, 1, 1);
     mesh.apply(m => {
       m.height = 0;
     });
     mesh.apply(m => {
       m.rawNeighbors.forEach(n => {
-        n.edge.slope = calculateSlope(m, n.meshItem, 1);
+        n.edge.slope = calculateSlope(m, n.meshItem, 1, 1);
       });
     });
 

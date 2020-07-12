@@ -7,7 +7,7 @@ import { MountainIslandGenerator } from "../generator/heightmap/MountainIsland";
 import { BasicNoiseGenerator } from "../generator/heightmap/BasicNoise";
 import { ErosionSimulation } from "../generator/heightmap/ErosionSimulation";
 import { Simulation, ISimulationStepEvent } from "../generator/Simulation";
-import { HexagonMesh } from "../mesh/HexagonMesh";
+import { HexagonMesh, HexagonMeshItem } from "../mesh/HexagonMesh";
 import { WindGenerator } from "../generator/weather/wind/WindGenerator";
 import { calculateSlope } from "../generator/heightmap/heightUtil";
 import { HumidityGenerator } from "../generator/weather/humidity/HumidityGenerator";
@@ -87,29 +87,31 @@ export class HybridScene extends Phaser.Scene {
   // stuck on erosion - hits a steady state too early
 
   create() {
-    const sunPositionNE = new Phaser.Math.Vector3(this.width, 0, 8000);
-    const sunPositionN = new Phaser.Math.Vector3(this.width / 2, 0, 8000);
+    const sunPositionNW = new Phaser.Math.Vector3(this.width * 1 / 5, 0, 6000);
+    const sunPositionN = new Phaser.Math.Vector3(this.width / 2, 0, 6000);
 
     this.simulation = new Simulation()
       .queue("initializeState", () => this.initializeState())
       .queue("basic noise", () => BasicNoiseGenerator.createHeightMap(this.mesh, INITIAL_HEIGHT_SCALE_M, this.rng))
       .queue("mountain island", () => MountainIslandGenerator.adjustHeightMap(this.hexMesh || this.mesh, PEAKS, HEIGHT_GEN_FALLOFF, MAX_HEIGHT_SCALE_M, INITIAL_HEIGHT_SCALE_M, this.width, this.height, this.width / 3, this.rng))
       .queue("convert to hexagonal", () => this.createHexagonalGrid())
-      .queue("erosion start", () => ErosionSimulation.initialize(this.hexMesh || this.mesh))
-      .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.hexMesh || this.mesh))
-      .until((i, out, last) => i >= 10 && out != last)
+      // .queue("erosion start", () => ErosionSimulation.initialize(this.hexMesh || this.mesh))
+      // .repeat("erosion continue", () => ErosionSimulation.adjustHeightMap(this.hexMesh || this.mesh))
+      // .until((i, out, last) => i >= 10 && out != last)
       .queue("recalculate slopes", () => this.recalculateSlopes())
       .queue("identify ocean & initialize weather", () => this.assignMeshType())
       .queue("calculate initial winds", () => WindGenerator.calculateWindEffect(this.hexMesh as HexagonMesh, this.initialWind))
       .repeat("calculate humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE, PRECIPITATION_SLOPE_MULTIPLIER), 5)
       .until((i, out) => i >= 50 || out === 0)
-      .repeat("calculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO), 1)
+      .repeat("calculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO), 5)
       .until((i, out) => i >= 5 || out === 0)
+      .queue("recalculate slopes", () => this.recalculateSlopes())
       .repeat("calculate addtl humidity & precipitation", () => HumidityGenerator.calculateHumidity(this.hexMesh as HexagonMesh, EVAPORATION_RATE, TRANSPIRATION_RATE, PRECIPITATION_RATE, PRECIPITATION_SLOPE_MULTIPLIER), 5)
       .until((i, out) => i >= 20 || out === 0)
+      .queue("recalculate rivers", () => RiverMapper.calculateRivers(this.hexMesh!, WATER_TO_HEIGHT_RATIO))
       .queue("calculate biomes", () => BiomeAssigner.assignBiomes(this.hexMesh!, TEMP_AT_SEALEVEL))
       .queue("calculate shadows", () => {
-        this.vShadowMap = ShadowMapper.castVoronoiShadows(this.mesh, this.hexMesh!, WATER_TO_HEIGHT_RATIO, sunPositionNE);
+        this.vShadowMap = ShadowMapper.castVoronoiShadows(this.mesh, this.hexMesh!, WATER_TO_HEIGHT_RATIO, sunPositionNW);
         this.vShadowMap?.concat(ShadowMapper.castVoronoiShadows(this.mesh, this.hexMesh!, WATER_TO_HEIGHT_RATIO, sunPositionN));
       })
       .queue("calculate highlights", () => {
@@ -217,6 +219,7 @@ export class HybridScene extends Phaser.Scene {
         }
         break;
       case "calculate rivers":
+      case "recalculate rivers":
         this.redrawRivers(DEPTH.RIVERS);
         //this.redrawDrainage(DEPTH.DRAINAGE);
         break;
@@ -248,7 +251,7 @@ export class HybridScene extends Phaser.Scene {
     });
     this.hexMesh?.apply(m => {
       m.rawNeighbors.forEach(n => {
-        n.edge.slope = calculateSlope(m, n.meshItem, this.pxToKilometers);
+        n.edge.slope = calculateSlope(m, n.meshItem, this.pxToKilometers, WATER_TO_HEIGHT_RATIO);
       });
     });
   }
@@ -287,7 +290,7 @@ export class HybridScene extends Phaser.Scene {
   }
 
   createHexagonalGrid() {
-    this.hexMesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height, this.pxToKilometers);
+    this.hexMesh = new HexagonMesh(this.hexWidth, this.hexHeight, this.width, this.height, this.pxToKilometers, WATER_TO_HEIGHT_RATIO);
     this.mesh.apply(m => {
       const hexM = this.hexMesh?.findClosest(m.site.x, m.site.y);
       if (hexM) {
@@ -370,10 +373,10 @@ export class HybridScene extends Phaser.Scene {
   getHeightMapColor(height: number) {
     if (height > 0) {
       //  more distinct bands
-      const colorAdjust = .3 + .7 * (height / MAX_HEIGHT_SCALE_M);
-      const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
-      //const colorAdjust = .9 + .1 * (height / MAX_HEIGHT_SCALE_M);
-      // const color = Phaser.Display.Color.HSLToColor(.05833, 1, colorAdjust);
+      // const colorAdjust = .3 + .7 * (height / MAX_HEIGHT_SCALE_M);
+      // const color = Phaser.Display.Color.HSLToColor(.3, .32, colorAdjust);
+      const colorAdjust = .9 + .1 * (height / MAX_HEIGHT_SCALE_M);
+      const color = Phaser.Display.Color.HSLToColor(.05833, 1, colorAdjust);
       return {
         color: color.color,
         alpha: .5
@@ -471,15 +474,15 @@ export class HybridScene extends Phaser.Scene {
   drawLightMap(depth: number): any {
     const lights = new Phaser.GameObjects.Group(this);
     // magic numbers
-    const azimuth = 315;
-    const elevation = 71;
+    const azimuth = 330;
+    const elevation = 45;
     const { a1, a2, a3 } = getConstants(azimuth, elevation);
     const z = 0.015;
     // end magic numbers
     this.highlightMap?.forEach(v => {
       const luminance = (a1 - a2 * (v.dzdx * z) - a3 * (v.dzdy * z)) / Math.sqrt(1 + (v.dzdx * z) ** 2 + (v.dzdy * z) ** 2);
       const shade = Phaser.Display.Color.HSLToColor(0, 0, luminance);
-      const light = this.add.polygon(0, 0, v.points, shade.color, 0.075)
+      const light = this.add.polygon(0, 0, v.points, shade.color, 0.15)
         .setOrigin(0, 0)
         .setDepth(depth);
       lights.add(light);
@@ -778,7 +781,7 @@ export class HybridScene extends Phaser.Scene {
     mesh.apply(m => {
       if (m.biome && m.river.pool === undefined && m.type !== MeshType.Ocean) {
         const color = Phaser.Display.Color.ValueToColor(mapBiomeToColor(m.biome.classification));
-        const p = this.add.polygon(0, 0, m.points, color.color, 0.35)
+        const p = this.add.polygon(0, 0, m.points, color.color, 0.5)
           .setOrigin(0, 0)
           .setDepth(depth);
         polygons.add(p);

@@ -67,9 +67,9 @@ export class HexagonMeshItem implements IHexagonMeshItem {
     this._indexedNeighbors.set(degrees, neighbor);
     this.rawNeighbors.push(neighbor);
   }
-  initNeighbor(neighbor: HexagonMeshItem | undefined, q: number, r: number, edgePoints: IVertex[], degrees: number, pxToKilometers: number) {
+  initNeighbor(neighbor: HexagonMeshItem | undefined, q: number, r: number, edgePoints: IVertex[], degrees: number, pxToKilometers: number, waterToHeighRation: number) {
     if (!neighbor) return;
-    const slope = calculateSlope(this, neighbor, pxToKilometers);
+    const slope = calculateSlope(this, neighbor, pxToKilometers, waterToHeighRation);
     this.setNeighbor({
       site: neighbor.site,
       meshItem: neighbor,
@@ -95,6 +95,7 @@ export class HexagonMesh implements IMesh {
     west: HexagonMeshItem[]
   };
   pxToKilometer: number;
+  waterToHeightRatio: number;
 
   private _d: {
     halfHexWidth: number;
@@ -103,12 +104,13 @@ export class HexagonMesh implements IMesh {
     threeQuarterHexHeight: number;
   }
 
-  constructor(hexWidth: number, hexHeight: number, width: number, height: number, pxToKilometer: number) {
+  constructor(hexWidth: number, hexHeight: number, width: number, height: number, pxToKilometer: number, waterToHeightRatio: number) {
     this.hexWidth = hexWidth;
     this.hexHeight = hexHeight;
     this.width = width;
     this.height = height;
     this.pxToKilometer = pxToKilometer;
+    this.waterToHeightRatio = waterToHeightRatio;
     this.edges = {
       north: [] as HexagonMeshItem[],
       east: [] as HexagonMeshItem[],
@@ -236,12 +238,12 @@ export class HexagonMesh implements IMesh {
 
     // calculate neighbors
     this.apply(m => {
-      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r - 1), 1, -1, [m.points[0], m.points[1]], 300, this.pxToKilometer);
-      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r + 0), 1, 0, [m.points[1], m.points[2]], 0, this.pxToKilometer);
-      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r + 1), 0, 1, [m.points[2], m.points[3]], 60, this.pxToKilometer);
-      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 1), -1, 1, [m.points[3], m.points[4]], 120, this.pxToKilometer);
-      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 0), -1, 0, [m.points[4], m.points[5]], 180, this.pxToKilometer);
-      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r - 1), 0, -1, [m.points[5], m.points[0]], 240, this.pxToKilometer);
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r - 1), 1, -1, [m.points[0], m.points[1]], 300, this.pxToKilometer, this.waterToHeightRatio);
+      m.initNeighbor(this.axialGet(m.axial.q + 1, m.axial.r + 0), 1, 0, [m.points[1], m.points[2]], 0, this.pxToKilometer, this.waterToHeightRatio);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r + 1), 0, 1, [m.points[2], m.points[3]], 60, this.pxToKilometer, this.waterToHeightRatio);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 1), -1, 1, [m.points[3], m.points[4]], 120, this.pxToKilometer, this.waterToHeightRatio);
+      m.initNeighbor(this.axialGet(m.axial.q - 1, m.axial.r + 0), -1, 0, [m.points[4], m.points[5]], 180, this.pxToKilometer, this.waterToHeightRatio);
+      m.initNeighbor(this.axialGet(m.axial.q + 0, m.axial.r - 1), 0, -1, [m.points[5], m.points[0]], 240, this.pxToKilometer, this.waterToHeightRatio);
     });
 
     // make sure edges are populated correctly

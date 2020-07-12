@@ -12,6 +12,9 @@ export const HumidityGenerator = {
       if (m.water.state > 0 || m.river.pool !== undefined) {
         m.humidity.sim.humidityIn += evaporationRate;
       }
+      else if (m.river.river && m.river.river.amount > 2) {
+        m.humidity.sim.humidityIn += 0.5 * evaporationRate;
+      }
       // transpiration - temporary
       if (m.type == MeshType.Land) {
         m.humidity.sim.humidityIn += transpirationRate;

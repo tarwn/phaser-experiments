@@ -98,7 +98,7 @@ describe("WindGenerator", () => {
         degrees: 45,
         strength: 10
       });
-      meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer, 1);
 
       const outputs = calculateWindOutput(meshItem);
 
@@ -117,7 +117,7 @@ describe("WindGenerator", () => {
         degrees: 45,
         strength: 10
       });
-      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 }, type: MeshType.Ocean }), 0, 0, [], 45 + 180, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 }, type: MeshType.Ocean }), 0, 0, [], 45 + 180, pxPerKilometer, 1);
 
       const outputs = calculateWindOutput(meshItem);
 
@@ -136,7 +136,7 @@ describe("WindGenerator", () => {
         degrees: 45,
         strength: 10
       });
-      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer, 1);
 
       const outputs = calculateWindOutput(meshItem);
 
@@ -155,7 +155,7 @@ describe("WindGenerator", () => {
         degrees: 45,
         strength: 10
       });
-      meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 1000, site: { x: 0, y: 0 } }), 0, 0, [], 45 + 180, pxPerKilometer, 1);
 
       const outputs = calculateWindOutput(meshItem);
 
@@ -172,11 +172,11 @@ describe("WindGenerator", () => {
       const meshItem = getSampleMeshItem({ height: 1000, site: { x: 1, y: 0 } });
       meshItem.weather.wind.input.add(0, { degrees: 0, strength: 10 });
       // originating W edge is downhill at 0m
-      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 } }), 0, 0, [], 180, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 0, site: { x: 0, y: 0 } }), 0, 0, [], 180, pxPerKilometer, 1);
       // NE edge is 800m
-      meshItem.initNeighbor(getSampleMeshItem({ height: 800, site: { x: 0.5, y: 1 } }), 0, 0, [], 300, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 800, site: { x: 0.5, y: 1 } }), 0, 0, [], 300, pxPerKilometer, 1);
       // SE edge is 900m (to force it to pick a testable direction, NE)
-      meshItem.initNeighbor(getSampleMeshItem({ height: 900, site: { x: 0.5, y: -1 } }), 0, 0, [], 60, pxPerKilometer);
+      meshItem.initNeighbor(getSampleMeshItem({ height: 900, site: { x: 0.5, y: -1 } }), 0, 0, [], 60, pxPerKilometer, 1);
 
       const outputs = calculateWindOutput(meshItem);
 
@@ -307,7 +307,7 @@ describe("WindGenerator", () => {
 
   describe("applyInitialWind", () => {
     it("applies 0 degree wind to west cells only", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 0, strength: 10 };
 
@@ -326,7 +326,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 60 degree wind to west + north cells only - but not NW corner", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 60, strength: 10 };
 
@@ -358,7 +358,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 120 degree wind to east + north cells only - not not NE corner", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 120, strength: 10 };
 
@@ -389,7 +389,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 180 degree wind to east cells only", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 180, strength: 10 };
 
@@ -408,7 +408,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 240 degree wind to east + south cells only - but not SE corner", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 240, strength: 10 };
 
@@ -439,7 +439,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 220 degree wind to east + south cells only - but not SE corner", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 220, strength: 10 };
 
@@ -474,7 +474,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 300 degree wind to west + south cells only - but not SW corner", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 300, strength: 10 };
 
@@ -505,7 +505,7 @@ describe("WindGenerator", () => {
       });
     });
     it("applies 45 as 0 + 60 degree wind to west + north cells only", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 45, strength: 10 };
 
@@ -548,7 +548,7 @@ describe("WindGenerator", () => {
 
   describe("calculateWindEffect", () => {
     it("generates even initial wind for 0 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 14, 20, 1);
+      const mesh = new HexagonMesh(7, 8, 14, 20, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 0, strength: 10 };
 
@@ -561,7 +561,7 @@ describe("WindGenerator", () => {
     });
 
     it("generates even initial wind for 0 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 0, strength: 10 };
 
@@ -574,7 +574,7 @@ describe("WindGenerator", () => {
     });
 
     it("generates even initial wind for 60 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 60, strength: 10 };
 
@@ -592,7 +592,7 @@ describe("WindGenerator", () => {
     });
 
     it("generates even initial wind for 45 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 45, strength: 10 };
 
@@ -606,7 +606,7 @@ describe("WindGenerator", () => {
 
     // saw tooth edges on the sides need some values when wind is vertical
     it("generates even initial wind for 90 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 90, strength: 10 };
 
@@ -620,7 +620,7 @@ describe("WindGenerator", () => {
 
     // saw tooth edges on the sides need some values when wind is vertical
     it("generates even initial wind for 240 degrees", () => {
-      const mesh = new HexagonMesh(7, 8, 70, 80, 1);
+      const mesh = new HexagonMesh(7, 8, 70, 80, 1, 1);
       mesh.apply(m => m.type = MeshType.Ocean);
       const initialWind = { degrees: 220, strength: 10 };
 
