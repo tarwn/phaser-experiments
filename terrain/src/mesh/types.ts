@@ -1,4 +1,3 @@
-import * as Phaser from "phaser";
 import { combineWind } from "../generator/weather/wind/windUtil";
 
 export enum Direction {

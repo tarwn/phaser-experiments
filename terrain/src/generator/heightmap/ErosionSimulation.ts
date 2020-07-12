@@ -1,7 +1,7 @@
 import { IMesh } from "../../mesh/types";
 
 export const ErosionSimulation = {
-  initialize: (mesh: IMesh, maxDepth: number) => {
+  initialize: (mesh: IMesh) => {
     // dump a bunch of dirt, water, and erosion on it
     mesh.apply(m => {
       m.water.state = 40;

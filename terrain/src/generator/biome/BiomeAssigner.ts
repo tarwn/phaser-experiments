@@ -1,6 +1,6 @@
 import { HexagonMesh } from "../../mesh/HexagonMesh";
 import { roundTo } from "../hexUtils";
-import { mapBiome, mapAridity, mapAridityFromPetRatio, mapAridityFromPrecipitation } from "./Maps";
+import { mapBiome, mapAridityFromPrecipitation } from "./Maps";
 
 const TEMP_DECREASE_PER_KM = 6.5;
 
