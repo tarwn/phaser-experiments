@@ -15,8 +15,8 @@ class Game extends Phaser.Game {
       },
       scene: [
         HybridScene,
-        VoronoiDrivenScene,
-        HexagonDrivenScene
+        // VoronoiDrivenScene,
+        // HexagonDrivenScene
       ]
     });
   }

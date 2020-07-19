@@ -4,8 +4,6 @@ import { mapBiome, mapAridityFromPrecipitation } from "./Maps";
 
 const TEMP_DECREASE_PER_KM = 6.5;
 
-
-// using amitp's for now to
 export const BiomeAssigner = {
   assignBiomes: (hexMesh: HexagonMesh, tempAtSeaLevel: number) => {
     hexMesh.apply(m => {
