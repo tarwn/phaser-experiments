@@ -16,6 +16,7 @@ import { roundTo } from "../generator/hexUtils";
 import { BiomeAssigner } from "../generator/biome/BiomeAssigner";
 import { mapBiomeToColor } from "../generator/biome/Maps";
 import { ShadowMapper, getConstants, ILightMapItem } from "../generator/shadowmap/ShadowMapper";
+import { ControlPanelPlugin, IControl } from "../plugins/ControlPanelPlugin";
 
 const WIDTH = 900;
 const HEIGHT = 900;
@@ -36,6 +37,18 @@ const PRECIPITATION_RATE = 0.025;
 const PRECIPITATION_SLOPE_MULTIPLIER = 8; // magic number for more rain going uphill
 const WATER_TO_HEIGHT_RATIO = 10;  // units of water to meters in height
 const TEMP_AT_SEALEVEL = 18;
+
+enum CalculatedLayers {
+  MeshLines = "MeshLines",
+  HeightMap = "HeightMap",
+  ShadowMap = "ShadowMap",
+  WindMap = "WindMap",
+  HumidityMap = "HumidityMap",
+  Rivers = "Rivers",
+  Precipitation = "Precipitation",
+  Drainage = "Drainage",
+  Biome = "Biome"
+};
 
 export class HybridScene extends Phaser.Scene {
   width: number;
@@ -66,11 +79,55 @@ export class HybridScene extends Phaser.Scene {
     rivers?: Phaser.GameObjects.Group;
     drainage?: Phaser.GameObjects.Group;
     biome?: Phaser.GameObjects.Group;
+    biomePrecipitation?: Phaser.GameObjects.Group;
+    biomeHumidity?: Phaser.GameObjects.Group;
     highlightHex?: Phaser.GameObjects.Polygon;
   };
+  layers = {
+    [CalculatedLayers.MeshLines]: { show: true, available: false },
+    [CalculatedLayers.HeightMap]: { show: true, available: false },
+    [CalculatedLayers.ShadowMap]: { show: false, available: false },
+    [CalculatedLayers.WindMap]: { show: false, available: false },
+    [CalculatedLayers.HumidityMap]: { show: false, available: false },
+    [CalculatedLayers.Rivers]: { show: false, available: false },
+    [CalculatedLayers.Precipitation]: { show: false, available: false },
+    [CalculatedLayers.Drainage]: { show: false, available: false },
+    [CalculatedLayers.Biome]: { show: false, available: false }
+  };
+  layerExtras = {
+    hexAvailable: false,
+    oceansAvailable: false,
+    coastlineAvailable: false,
+    highlightsAvailable: false
+  };
+
   hexWidth: number;
   hexHeight: number;
   pxToKilometers: number;
+  controlPanel!: ControlPanelPlugin;
+
+  DEPTH = {
+    MESH_BOTTOM: 0,
+    HEIGHTMAP: 1,
+
+    BIOME_CLASSIFICATION: 3,
+
+    HEIGHT_SHADOWS: 4,
+    HEIGHT_LIGHT: 5,
+
+    OCEAN: 6,
+    COASTLINE: 7,
+    RIVERS: 8,
+    DRAINAGE: 9,
+
+    BIOME_HUMIDITY: 12,
+    BIOME_PRECIPITATION: 13,
+    HUMIDITY: 14,
+    WINDMAP: 15,
+    MESH_OVERLAY: 20,
+
+    UI_OVERLAY: 25
+  };
 
   constructor() {
     super("HybridScene");
@@ -84,9 +141,13 @@ export class HybridScene extends Phaser.Scene {
     this.pxToKilometers = PX_TO_KM;
   }
 
-  // stuck on erosion - hits a steady state too early
+  preload() {
+    this.load.scenePlugin("ControlPanelPlugin", ControlPanelPlugin, undefined, "controlPanel");
+  }
 
   create() {
+    this.controlPanel.init({ depth: this.DEPTH.UI_OVERLAY }, this.createCommandPanelCommands());
+
     const sunPositionNW = new Phaser.Math.Vector3(this.width * 1 / 5, 0, 6000);
     const sunPositionN = new Phaser.Math.Vector3(this.width / 2, 0, 6000);
 
@@ -119,7 +180,7 @@ export class HybridScene extends Phaser.Scene {
       })
       .complete();
 
-    this.simulation.events.on('stepComplete', this.updateGraphicsFromSimulation, this);
+    this.simulation.events.on('stepComplete', this.updateAvailableLayersFromSimulation, this);
     this.input.on('pointerdown', () => {
       if (this.hexMesh) {
         const { x, y } = this.game.input.mousePointer;
@@ -139,103 +200,143 @@ export class HybridScene extends Phaser.Scene {
     });
   }
 
+  createCommandPanelCommands(): IControl[] {
+    const controls = Object.keys(CalculatedLayers).map(layer => {
+      // event handlers
+      const layerEnum = layer as CalculatedLayers;
+      this.events.on(`CMD: Hide ${layer}`, () => {
+        if (this.layers[layerEnum].available) {
+          this.hideLayerCommand(layerEnum, `Hiding ${layer}`);
+        }
+      });
+      this.events.on(`CMD: Show ${layer}`, () => {
+        if (this.layers[layerEnum].available) {
+          this.showLayerCommand(layerEnum, `Showing ${layer}`);
+        }
+      });
+
+      // controls for buttons with states
+      return {
+        initialText: `--- No ${layer} yet`,
+        states: [
+          { triggeringEvent: `Starting ${layer}`, label: `--- Calculating ${layer}` },
+          { triggeringEvent: `Showing ${layer}`, label: `[X] ${layer}`, onClickEvent: `CMD: Hide ${layer}` },
+          { triggeringEvent: `Hiding ${layer}`, label: `[ ] ${layer}`, onClickEvent: `CMD: Show ${layer}` }
+        ]
+      };
+    });
+    return controls;
+  }
+
   update() {
     if (this.simulation.canRun()) {
       this.simulation.startOneStep();
     }
 
     if (this.hexMesh) {
-      const { x, y } = this.game.input.mousePointer;
-      const r = this.hexMesh.yToR(y);
-      const q = this.hexMesh.xToQ(x, r);
-      const hex = this.hexMesh.axialGet(q, r);
-      if (hex) {
-        if (this.graphics.highlightHex) {
-          this.graphics.highlightHex.destroy();
-        }
-        this.graphics.highlightHex = this.add.polygon(0, 0, hex.points, 0xffffff, 0)
-          .setDepth(10)
-          .setOrigin(0, 0)
-          .setStrokeStyle(1, 0xffffff);
-      }
+      this.drawMouseHover();
     }
   }
 
-  updateGraphicsFromSimulation(args: ISimulationStepEvent) {
-    const DEPTH = {
-      MESH_BOTTOM: 0,
-      HEIGHTMAP: 1,
+  // -- Layer Display Management
 
-      BIOME_CLASSIFICATION: 3,
-
-      HEIGHT_SHADOWS: 4,
-      HEIGHT_LIGHT: 5,
-
-      OCEAN: 6,
-      COASTLINE: 7,
-      RIVERS: 8,
-      DRAINAGE: 9,
-
-      BIOME_HUMIDITY: 12,
-      BIOME_PRECIPITATION: 13,
-      HUMIDITY: 14,
-      WINDMAP: 15,
-      MESH_OVERLAY: 20
-    };
+  updateAvailableLayersFromSimulation(args: ISimulationStepEvent) {
     switch (args.step) {
       case "initialize":
+        this.setLayerAvailable(CalculatedLayers.MeshLines);
+        this.setLayerStarting(CalculatedLayers.HeightMap);
         break;
       case "basic noise":
-        this.redrawMesh(DEPTH.MESH_BOTTOM, this.hexMesh || this.mesh, true);
-        break;
       case "mountain island":
-        this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh);
-        break;
       case "erosion start":
-        this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh);
+        this.setLayerAvailable(CalculatedLayers.HeightMap, true);
         break;
       case "erosion continue":
-        // console.log(args);
         if (args.attemptNumber % 4 === 0) {
-          this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh);
+          this.drawLayer(CalculatedLayers.HeightMap, true);
         }
         break;
       case "convert to hexagonal":
-        this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh);
-        // this.redrawMesh(0, this.hexMesh || this.mesh, false);
-        this.redrawMesh(DEPTH.MESH_OVERLAY, this.mesh, true);
+        this.layerExtras.hexAvailable = true;
+        this.setLayerAvailable(CalculatedLayers.MeshLines, true);
+        this.setLayerAvailable(CalculatedLayers.HeightMap, true);
         break;
       case "identify ocean & initialize weather":
-        this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh);
-        this.redrawCoastline(DEPTH.COASTLINE);
+        this.layerExtras.oceansAvailable = true;
+        this.layerExtras.coastlineAvailable = true;
+        this.setLayerAvailable(CalculatedLayers.HeightMap, true);
+        this.setLayerStarting(CalculatedLayers.WindMap);
         break;
       case "calculate initial winds":
-        //this.redrawWindMap(DEPTH.WINDMAP);
+        this.setLayerAvailable(CalculatedLayers.WindMap);
+        this.setLayerStarting(CalculatedLayers.HumidityMap);
         break;
       case "calculate humidity & precipitation":
-      case "calculate addtl humidity & precipitation":
         if (args.attemptNumber % 5 == 0) {
-          //this.redrawHumidity(DEPTH.HUMIDITY);
+          this.setLayerAvailable(CalculatedLayers.HumidityMap, true);
+          this.setLayerStarting(CalculatedLayers.Drainage);
+          this.setLayerStarting(CalculatedLayers.Rivers);
         }
         break;
       case "calculate rivers":
       case "recalculate rivers":
-        this.redrawRivers(DEPTH.RIVERS);
-        //this.redrawDrainage(DEPTH.DRAINAGE);
+        this.setLayerAvailable(CalculatedLayers.Drainage, true);
+        this.setLayerAvailable(CalculatedLayers.Rivers, true);
+        this.setLayerAvailable(CalculatedLayers.HumidityMap, true);
+        this.setLayerStarting(CalculatedLayers.Biome);
+        this.setLayerStarting(CalculatedLayers.Precipitation);
+        break;
+      case "calculate addtl humidity & precipitation":
+        if (args.attemptNumber % 5 == 0) {
+          this.setLayerAvailable(CalculatedLayers.HumidityMap, true);
+        }
         break;
       case "calculate biomes":
-        //this.redrawBiomeHumidity(DEPTH.BIOME_HUMIDITY);
-        //this.redrawBiomePrecipitation(DEPTH.BIOME_PRECIPITATION);
-        this.redrawBiomeClassifications(DEPTH.BIOME_CLASSIFICATION);
+        this.setLayerAvailable(CalculatedLayers.HumidityMap, true);
+        this.setLayerAvailable(CalculatedLayers.Biome, true);
+        this.setLayerAvailable(CalculatedLayers.Precipitation, true);
+        this.setLayerStarting(CalculatedLayers.ShadowMap);
         break;
       case "calculate shadows":
+        this.setLayerAvailable(CalculatedLayers.ShadowMap, true);
       case "calculate highlights":
-        this.redrawShadows(DEPTH.HEIGHT_SHADOWS, DEPTH.HEIGHT_LIGHT);
+        this.layerExtras.highlightsAvailable = true;
+        this.setLayerAvailable(CalculatedLayers.ShadowMap, true);
         break;
     }
-
-
   }
+
+  setLayerStarting(layer: CalculatedLayers) {
+    this.events.emit(`Starting ${layer}`);
+  }
+  setLayerAvailable(layer: CalculatedLayers, forceRefresh?: boolean) {
+    if (!this.layers[layer].available) {
+      this.layers[layer].available = true;
+      if (this.layers[layer].show) {
+        this.events.emit(`Showing ${layer}`);
+      }
+      else {
+        this.events.emit(`Hiding ${layer}`);
+      }
+    }
+    if (this.layers[layer].show) {
+      this.drawLayer(layer, forceRefresh);
+    }
+  }
+
+  showLayerCommand(layer: CalculatedLayers, eventToEmit: string) {
+    this.layers[layer].show = true;
+    this.drawLayer(layer);
+    this.events.emit(eventToEmit);
+  }
+
+  hideLayerCommand(layer: CalculatedLayers, eventToEmit: string) {
+    this.layers[layer].show = false;
+    this.hideLayer(layer);
+    this.events.emit(eventToEmit);
+  }
+
+  // -- Local Calculations
 
   initializeState() {
     console.log(`Creating voronoi: seed "${this.seed}"`);
@@ -310,6 +411,8 @@ export class HybridScene extends Phaser.Scene {
     console.log(`${ctr} hex tiles had to be post-averaged from neighbors`);
   }
 
+  // -- Graphical Upadtes
+
   drawVoronoi(depth: number) {
     return this.voronoi.cells.map(c => {
       const poly = this.add.polygon(0, 0, c.halfedges.map(h => h.getStartpoint()));
@@ -325,8 +428,117 @@ export class HybridScene extends Phaser.Scene {
     });
   }
 
+  drawMouseHover() {
+    if (this.hexMesh) {
+      const { x, y } = this.game.input.mousePointer;
+      const r = this.hexMesh.yToR(y);
+      const q = this.hexMesh.xToQ(x, r);
+      const hex = this.hexMesh.axialGet(q, r);
+      if (hex) {
+        if (this.graphics.highlightHex) {
+          this.graphics.highlightHex.destroy();
+        }
+        this.graphics.highlightHex = this.add.polygon(0, 0, hex.points, 0xffffff, 0)
+          .setDepth(10)
+          .setOrigin(0, 0)
+          .setStrokeStyle(1, 0xffffff);
+      }
+    }
+    else if (this.graphics.highlightHex) {
+      this.graphics.highlightHex.destroy();
+    }
+  }
 
-  redrawMesh(depth: number, mesh: IMesh, centerOnly: boolean) {
+  drawLayer(layer: CalculatedLayers, forceRefresh?: boolean) {
+    const { DEPTH } = this;
+    const refresh = forceRefresh ?? false;
+    switch (layer) {
+      case CalculatedLayers.MeshLines:
+        this.redrawMesh(DEPTH.MESH_OVERLAY, this.mesh, false, refresh);
+        break;
+      case CalculatedLayers.HeightMap:
+        this.redrawHeightMap(DEPTH.HEIGHTMAP, DEPTH.OCEAN, this.hexMesh || this.mesh, refresh);
+        if (this.layerExtras.coastlineAvailable) {
+          this.redrawCoastline(DEPTH.COASTLINE, refresh);
+        }
+        break;
+      case CalculatedLayers.WindMap:
+        this.redrawWindMap(DEPTH.WINDMAP, refresh);
+        break;
+      case CalculatedLayers.HumidityMap:
+        this.redrawHumidity(DEPTH.HUMIDITY, refresh);
+        break;
+      case CalculatedLayers.Drainage:
+        this.redrawDrainage(DEPTH.DRAINAGE, refresh);
+        break;
+      case CalculatedLayers.Rivers:
+        this.redrawRivers(DEPTH.RIVERS, refresh);
+        break;
+      case CalculatedLayers.Precipitation:
+        this.redrawBiomePrecipitation(DEPTH.BIOME_PRECIPITATION, refresh);
+        break;
+      case CalculatedLayers.HumidityMap:
+        this.redrawBiomeHumidity(DEPTH.BIOME_HUMIDITY, refresh);
+        break;
+      case CalculatedLayers.Biome:
+        this.redrawBiomeClassifications(DEPTH.BIOME_CLASSIFICATION, refresh);
+        break;
+      case CalculatedLayers.ShadowMap:
+        this.redrawShadows(DEPTH.HEIGHT_SHADOWS, refresh);
+        if (this.layerExtras.highlightsAvailable) {
+          this.redrawLights(DEPTH.HEIGHT_LIGHT, refresh);
+        }
+        break;
+    }
+  }
+
+  hideLayer(layer: CalculatedLayers) {
+    switch (layer) {
+      case CalculatedLayers.MeshLines:
+        this.hideMesh();
+        break;
+      case CalculatedLayers.HeightMap:
+        this.hideHeightMap();
+        this.hideCoastline();
+        break;
+      case CalculatedLayers.WindMap:
+        this.hideWindmap();
+        break;
+      case CalculatedLayers.HumidityMap:
+        this.hideHumidity();
+        break;
+      case CalculatedLayers.Drainage:
+        this.hideDrainage();
+        break;
+      case CalculatedLayers.Rivers:
+        this.hideRivers();
+        break;
+      case CalculatedLayers.Precipitation:
+        this.hideBiomePrecipitation();
+        break;
+      case CalculatedLayers.HumidityMap:
+        this.hideBiomeHumidity();
+        break;
+      case CalculatedLayers.Biome:
+        this.hideBiomeClassifications();
+        break;
+      case CalculatedLayers.ShadowMap:
+        this.hideShadows();
+        this.hideLights();
+        break;
+    }
+  }
+
+  hideMesh() {
+    if (this.graphics.meshLines) {
+      this.graphics.meshLines.setVisible(false);
+    }
+  }
+  redrawMesh(depth: number, mesh: IMesh, centerOnly: boolean, forceRefresh: boolean) {
+    if (this.graphics.meshLines && !forceRefresh) {
+      this.graphics.meshLines.setVisible(true);
+      return;
+    }
     if (this.graphics.meshLines) {
       this.graphics.meshLines.clear(true, true);
     }
@@ -364,7 +576,16 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-  redrawHeightMap(depth: number, depthOcean: number, mesh: IMesh) {
+  hideHeightMap() {
+    if (this.graphics.heightMap) {
+      this.graphics.heightMap.setVisible(false);
+    }
+  }
+  redrawHeightMap(depth: number, depthOcean: number, mesh: IMesh, forceRefresh: boolean) {
+    if (this.graphics.heightMap && !forceRefresh) {
+      this.graphics.heightMap.setVisible(true);
+      return;
+    }
     if (this.graphics.heightMap) {
       this.graphics.heightMap.clear(true, true);
     }
@@ -407,7 +628,16 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-  redrawCoastline(depth: number) {
+  hideCoastline() {
+    if (this.graphics.coastline) {
+      this.graphics.coastline.setVisible(false);
+    }
+  }
+  redrawCoastline(depth: number, forceRefresh: boolean) {
+    if (this.graphics.coastline && !forceRefresh) {
+      this.graphics.coastline.setVisible(true);
+      return;
+    }
     if (this.graphics.coastline) {
       this.graphics.coastline.clear(true, true);
     }
@@ -431,22 +661,26 @@ export class HybridScene extends Phaser.Scene {
     return coastline;
   }
 
-  redrawShadows(shadowDepth: number, lightDepth: number) {
+  hideShadows() {
+    if (this.graphics.shadows) {
+      this.graphics.shadows.setVisible(false);
+    }
+  }
+  redrawShadows(shadowDepth: number, forceRefresh: boolean) {
+    if (this.graphics.shadows && !forceRefresh) {
+      this.graphics.shadows.setVisible(true);
+      return;
+    }
+
+    // shadowmaps
     if (this.graphics.shadows) {
       this.graphics.shadows.clear(true, true);
     }
     if (this.shadowMap) {
-      this.graphics.shadows = this.add.group(this.drawShadows(shadowDepth));
+      this.graphics.shadows = this.drawShadows(shadowDepth);
     }
     else if (this.vShadowMap) {
-      this.graphics.shadows = this.add.group(this.drawVShadows(shadowDepth));
-    }
-
-    if (this.graphics.lights) {
-      this.graphics.lights.clear(true, true);
-    }
-    if (this.highlightMap) {
-      this.graphics.lights = this.add.group(this.drawLightMap(lightDepth));
+      this.graphics.shadows = this.drawVShadows(shadowDepth);
     }
   }
   drawShadows(depth: number): any {
@@ -471,6 +705,26 @@ export class HybridScene extends Phaser.Scene {
     });
     return shadows;
   }
+
+  hideLights() {
+    if (this.graphics.lights) {
+      this.graphics.lights.setVisible(false);
+    }
+  }
+  redrawLights(lightDepth: number, forceRefresh: boolean) {
+    if (this.graphics.lights && !forceRefresh) {
+      this.graphics.lights.setVisible(true);
+      return;
+    }
+
+    // lightmaps
+    if (this.graphics.lights) {
+      this.graphics.lights.clear(true, true);
+    }
+    if (this.highlightMap) {
+      this.graphics.lights = this.drawLightMap(lightDepth);
+    }
+  }
   drawLightMap(depth: number): any {
     const lights = new Phaser.GameObjects.Group(this);
     // magic numbers
@@ -490,7 +744,17 @@ export class HybridScene extends Phaser.Scene {
     return lights;
   }
 
-  redrawWindMap(depth: number) {
+  hideWindmap() {
+    if (this.graphics.windmap) {
+      this.graphics.windmap.setVisible(false);
+    }
+  }
+  redrawWindMap(depth: number, forceRefresh: boolean) {
+    if (this.graphics.windmap && !forceRefresh) {
+      this.graphics.windmap.setVisible(true);
+      return;
+    }
+
     if (this.graphics.windmap) {
       this.graphics.windmap.clear(true, true);
     }
@@ -577,7 +841,16 @@ export class HybridScene extends Phaser.Scene {
     return windmap;
   }
 
-  redrawHumidity(depth: number) {
+  hideHumidity() {
+    if (this.graphics.humidityMap) {
+      this.graphics.humidityMap.setVisible(false);
+    }
+  }
+  redrawHumidity(depth: number, forceRefresh: boolean) {
+    if (this.graphics.humidityMap && !forceRefresh) {
+      this.graphics.humidityMap.setVisible(true);
+      return;
+    }
     if (this.graphics.humidityMap) {
       this.graphics.humidityMap.clear(true, true);
     }
@@ -620,7 +893,16 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-  redrawRivers(depth: number) {
+  hideRivers() {
+    if (this.graphics.rivers) {
+      this.graphics.rivers.setVisible(false);
+    }
+  }
+  redrawRivers(depth: number, forceRefresh: boolean) {
+    if (this.graphics.rivers && !forceRefresh) {
+      this.graphics.rivers.setVisible(true);
+      return;
+    }
     if (this.graphics.rivers) {
       this.graphics.rivers.clear(true, true);
     }
@@ -670,7 +952,17 @@ export class HybridScene extends Phaser.Scene {
     });
     return polygons;
   }
-  redrawDrainage(depth: number) {
+
+  hideDrainage() {
+    if (this.graphics.drainage) {
+      this.graphics.drainage.setVisible(false);
+    }
+  }
+  redrawDrainage(depth: number, forceRefresh: boolean) {
+    if (this.graphics.drainage && !forceRefresh) {
+      this.graphics.drainage.setVisible(true);
+      return;
+    }
     if (this.graphics.drainage) {
       this.graphics.drainage.clear(true, true);
     }
@@ -699,12 +991,20 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-
-  redrawBiomeHumidity(depth: number) {
-    if (this.graphics.biome) {
-      this.graphics.biome.clear(true, true);
+  hideBiomeHumidity() {
+    if (this.graphics.biomeHumidity) {
+      this.graphics.biomeHumidity.setVisible(false);
     }
-    this.graphics.biome = this.drawBiomeHumidity(depth, this.hexMesh!);
+  }
+  redrawBiomeHumidity(depth: number, forceRefresh: boolean) {
+    if (this.graphics.biomeHumidity && !forceRefresh) {
+      this.graphics.biomeHumidity.setVisible(true);
+      return;
+    }
+    if (this.graphics.biomeHumidity) {
+      this.graphics.biomeHumidity.clear(true, true);
+    }
+    this.graphics.biomeHumidity = this.drawBiomeHumidity(depth, this.hexMesh!);
   }
   drawBiomeHumidity(depth: number, mesh: HexagonMesh) {
     const polygons = new Phaser.GameObjects.Group(this);
@@ -735,11 +1035,20 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-  redrawBiomePrecipitation(depth: number) {
-    if (this.graphics.biome) {
-      this.graphics.biome.clear(true, true);
+  hideBiomePrecipitation() {
+    if (this.graphics.biomePrecipitation) {
+      this.graphics.biomePrecipitation.setVisible(false);
     }
-    this.graphics.biome = this.drawBiomePrecipitation(depth, this.hexMesh!);
+  }
+  redrawBiomePrecipitation(depth: number, forceRefresh: boolean) {
+    if (this.graphics.biomePrecipitation && !forceRefresh) {
+      this.graphics.biomePrecipitation.setVisible(true);
+      return;
+    }
+    if (this.graphics.biomePrecipitation) {
+      this.graphics.biomePrecipitation.clear(true, true);
+    }
+    this.graphics.biomePrecipitation = this.drawBiomePrecipitation(depth, this.hexMesh!);
   }
   drawBiomePrecipitation(depth: number, mesh: HexagonMesh) {
     const polygons = new Phaser.GameObjects.Group(this);
@@ -770,7 +1079,16 @@ export class HybridScene extends Phaser.Scene {
     return polygons;
   }
 
-  redrawBiomeClassifications(depth: number) {
+  hideBiomeClassifications() {
+    if (this.graphics.biome) {
+      this.graphics.biome.setVisible(false);
+    }
+  }
+  redrawBiomeClassifications(depth: number, forceRefresh: boolean) {
+    if (this.graphics.biome && !forceRefresh) {
+      this.graphics.biome.setVisible(true);
+      return;
+    }
     if (this.graphics.biome) {
       this.graphics.biome.clear(true, true);
     }
