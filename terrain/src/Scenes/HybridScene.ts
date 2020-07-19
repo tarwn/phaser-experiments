@@ -411,7 +411,7 @@ export class HybridScene extends Phaser.Scene {
     console.log(`${ctr} hex tiles had to be post-averaged from neighbors`);
   }
 
-  // -- Graphical Upadtes
+  // -- Graphical Updates
 
   drawVoronoi(depth: number) {
     return this.voronoi.cells.map(c => {
