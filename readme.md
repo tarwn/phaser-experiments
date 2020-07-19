@@ -7,6 +7,7 @@ This is a repository of experimental projects to procedurally generate terrain.
 This is the most involved one, featuring voronoi and hexagonal heightmaps, wind and
 precipitation, river flux generation, and biomes based on the Holdridge model.
 
+[![Example Terrain](./terrain/examples/Example2-DiffSeedMorePeaksDiffWind.PNG)](/terrain/readme.md)
 
 
 [More detail in /terrain](/terrain/readme.md)
